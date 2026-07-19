@@ -9,13 +9,23 @@ export default function SidebarItem({ name, icon, isSelected, onClick }: Props) 
   return (
     <button
       onClick={isSelected ? undefined : onClick}
-      className={`flex items-center w-full border gap-2 h-12 rounded-xl p-3
-       text-gray-400 hover:text-white transition-colors ${
-         isSelected ? 'border-white text-white cursor-default' : 'border-white/5 cursor-pointer'
-       }`}
+      className={`group relative flex items-center w-full gap-3 h-12 rounded-xl p-3 transition-all duration-300 overflow-hidden ${
+        isSelected 
+          ? 'bg-white/10 text-white cursor-default shadow-md' 
+          : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 cursor-pointer'
+      }`}
     >
-      {icon}
-      <div>{name}</div>
+      {/* Акцентная линия слева для выбранного элемента */}
+      {isSelected && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-1/2 bg-blue-500 rounded-r-full shadow-[0_0_12px_theme(colors.blue.500)]" />
+      )}
+      
+      {/* Иконка с легким эффектом увеличения при наведении */}
+      <div className={`transition-transform duration-300 ${isSelected ? 'scale-110 text-blue-400' : 'group-hover:scale-110'}`}>
+        {icon}
+      </div>
+      
+      <div className="font-medium tracking-wide">{name}</div>
     </button>
   )
 }

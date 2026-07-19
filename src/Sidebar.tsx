@@ -9,7 +9,7 @@ type Props = {
 
 export default function Sidebar({ activeTab, onSelect }: Props) {
   return (
-    <nav className='bg-[#1E2029] w-[20%] h-full rounded-xl border border-white/5 flex justify-between flex-col p-2'>
+    <nav className='bg-[#1E2029]/90 backdrop-blur-sm w-[20%] shadow-2xl shadow-black/40 h-full rounded-xl border border-white/5 flex justify-between flex-col p-2'>
       <div className='flex flex-col gap-3'>
         {mainNavItems.map((item) => (
           <SidebarItem

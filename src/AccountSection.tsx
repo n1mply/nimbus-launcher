@@ -89,9 +89,16 @@ export default function AccountSection() {
   return (
     <div
       ref={containerRef}
-      className='bg-[#1E2029] h-full w-[20%] rounded-xl border border-white/5 overflow-hidden'
+      // Добавляем градиент, тень и relative для позиционирования свечения
+      className='relative bg-gradient-to-b from-[#1E2029] to-[#14151C] h-full w-[20%] rounded-xl border border-white/5 overflow-hidden shadow-2xl shadow-black/40'
     >
-      <canvas ref={canvasRef} className='w-full h-full cursor-grab active:cursor-grabbing' />
+      {/* Фоновое свечение (Glow) за персонажем */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none" />
+      
+      <canvas 
+        ref={canvasRef} 
+        className='relative z-10 w-full h-full cursor-grab active:cursor-grabbing' 
+      />
     </div>
   )
 }
