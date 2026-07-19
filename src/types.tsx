@@ -1,0 +1,1 @@
+export type TabId = 'instances' | 'mods' | 'modpacks' | 'resourcepacks' | 'shaders' | 'settings'
