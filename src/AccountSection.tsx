@@ -1,6 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SkinViewer, IdleAnimation } from 'skinview3d'
 import { Box3, CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three'
+import SidebarItem from './SidebarItem'
+import AccountTile from './AccountTile'
+import { Shirt, Scroll } from 'lucide-react'
+import CustomModal from './CustomModal'
 
 function createShadowTexture(): CanvasTexture {
   const size = 128
@@ -22,6 +26,9 @@ function createShadowTexture(): CanvasTexture {
 export default function AccountSection() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [isOpenSkins, setOpenSkins] = useState(false)
+  const [isOpenCapes, setOpenCapes] = useState(false)
+  const [isOpenAccount, setOpenAccount] = useState(false)
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return
@@ -34,16 +41,12 @@ export default function AccountSection() {
     })
 
     viewer.fov = 60
-    viewer.zoom = 0.5
+    viewer.zoom = 0.6
     viewer.controls.enableZoom = false
 
-    // Блокируем вертикальное перетаскивание (наклон камеры вверх/вниз),
-    // оставляем только горизонтальное вращение вокруг персонажа.
-    // Math.PI / 2 — это "экватор", камера всегда на уровне глаз модели.
     viewer.controls.minPolarAngle = Math.PI / 2
     viewer.controls.maxPolarAngle = Math.PI / 2
 
-    // Изначальный разворот персонажа — playerWrapper не сбрасывается сменой анимации
     viewer.playerWrapper.rotation.y = -Math.PI / 7
 
     const resizeObserver = new ResizeObserver(([entry]) => {
@@ -87,18 +90,35 @@ export default function AccountSection() {
   }, [])
 
   return (
+    <>
     <div
-      ref={containerRef}
-      // Добавляем градиент, тень и relative для позиционирования свечения
-      className='relative bg-gradient-to-b from-[#1E2029] to-[#14151C] h-full w-[20%] rounded-xl border border-white/5 overflow-hidden shadow-2xl shadow-black/40'
+      className='relative h-full w-[20%] rounded-xl overflow-hidden shadow-2xl shadow-black/40 flex flex-col gap-5'
     >
-      {/* Фоновое свечение (Glow) за персонажем */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none" />
-      
-      <canvas 
-        ref={canvasRef} 
-        className='relative z-10 w-full h-full cursor-grab active:cursor-grabbing' 
-      />
+        <div className="flex flex-row justify-around w-full shrink-0 relative z-10">
+          <AccountTile />
+        </div>
+      {/* Обертка для канваса. flex-1 заставляет её занять всё оставшееся место.
+          Сюда перенесён containerRef для правильного расчета размеров 3D-сцены */}
+      <div ref={containerRef} className="relative flex-1 min-h-0 w-full">
+
+        <div className="absolute top-1/2 left-1/2 bg-gradient-to-b from-[#1E2029] to-[#14151C]  -translate-x-1/2 -translate-y-1/2 h-full w-full rounded-xl pointer-events-none border border-white/5" />
+        <canvas 
+          ref={canvasRef} 
+          className='relative z-10 w-full h-full cursor-grab active:cursor-grabbing block' 
+        />
+      </div>
+
+      <div className="flex flex-row justify-around gap-2 shrink-0 relative z-10 border border-white/5 bg-black/10 bg-gradient-to-b from-[#1E2029] to-[#14151C] rounded-xl">
+        <SidebarItem icon={<Shirt size={24} />} isSelected={false} onClick={() => setOpenSkins(true)}/>
+        <SidebarItem icon={<Scroll size={24} />} isSelected={false} onClick={() => setOpenCapes(true)}/>
+      </div>
     </div>
+      <CustomModal isOpen={isOpenCapes} onClose={() => setOpenCapes(false)} size="medium" title="Your Capes">
+        <p className="text-sm text-gray-400">So many Capes!!!</p>
+      </CustomModal>
+      <CustomModal isOpen={isOpenSkins} onClose={() => setOpenSkins(false)} size="medium" title="Your Skins">
+        <p className="text-sm text-gray-400">So many skins!!!</p>
+      </CustomModal>
+    </>
   )
 }

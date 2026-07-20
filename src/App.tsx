@@ -28,7 +28,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0D1017] text-white select-none font-montserrat relative">
-      {/* Декоративное фоновое свечение на весь экран (опционально) */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
       <HeaderMenu />
@@ -36,8 +35,7 @@ export default function App() {
         <div className="flex p-6 h-full gap-5">
           <Sidebar activeTab={activeTab} onSelect={setActiveTab} />
           
-          {/* Центральная панель контента */}
-          <main className='bg-[#1E2029]/90 backdrop-blur-sm h-full w-[60%] flex-1 rounded-xl border border-white/5 overflow-hidden shadow-2xl shadow-black/40 flex flex-col'>
+          <main className='bg-gradient-to-b from-[#1E2029] to-[#14151C] backdrop-blur-sm h-full w-[60%] flex-1 rounded-xl border border-white/5 overflow-hidden shadow-2xl shadow-black/40 flex flex-col'>
             {renderPage(activeTab)}
           </main>
           
