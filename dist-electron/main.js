@@ -18614,16 +18614,19 @@ function loginWithPrismarine(showDeviceCodeUI) {
   });
 }
 async function processLoginResult(result) {
-  var _a, _b;
+  var _a, _b, _c;
   const profile = result.profile;
   const activeSkin = ((_a = profile.skins) == null ? void 0 : _a.find((s) => s.state === "ACTIVE")) ?? ((_b = profile.skins) == null ? void 0 : _b[0]);
   let localSkinPath = null;
   if (activeSkin == null ? void 0 : activeSkin.url) {
     localSkinPath = await downloadAndSaveSkin(profile.id, activeSkin.url);
   }
+  const activeCape = (_c = profile.capes) == null ? void 0 : _c.find((c) => c.state === "ACTIVE");
+  const activeCapeUrl = (activeCape == null ? void 0 : activeCape.url) ?? null;
   return {
     profile: { uuid: profile.id, username: profile.name },
-    localSkinPath
+    localSkinPath,
+    activeCapeUrl
   };
 }
 function registerAuthHandlers() {

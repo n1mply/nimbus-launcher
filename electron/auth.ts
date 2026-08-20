@@ -32,7 +32,6 @@ async function downloadAndSaveSkin(uuid: string, skinUrl: string): Promise<strin
   return `${uuid}.png`  
 }
 
-
 // showDeviceCodeUI=false используется при тихом восстановлении сессии при старте
 // приложения — если токен протух и нужен новый вход, мы не показываем модалку
 // сами по себе, а просто сообщаем "нужен логин" и даём пользователю нажать кнопку сам.
@@ -66,7 +65,7 @@ function loginWithPrismarine(showDeviceCodeUI: boolean) {
       .then(resolve)
       .catch((err) => {
         if (!codeWasShown) reject(err)
-        // если codeWasShown уже true и showDeviceCodeUI=false — промис уже reject-нут выше
+        
       })
   })
 }
@@ -80,9 +79,14 @@ async function processLoginResult(result: any) {
     localSkinPath = await downloadAndSaveSkin(profile.id, activeSkin.url)
   }
 
+  const activeCape = profile.capes?.find((c: any) => c.state === 'ACTIVE')
+  
+  const activeCapeUrl: string | null = activeCape?.url ?? null
+
   return {
     profile: { uuid: profile.id, username: profile.name },
     localSkinPath,
+    activeCapeUrl,
   }
 }
 
@@ -111,20 +115,20 @@ export function registerAuthHandlers(): void {
 }
 
 export function registerAppFileProtocol(): void {
-protocol.handle('app-file', async (request) => {
-  const url = new URL(request.url)
-  const fileName = decodeURIComponent(url.pathname).replace(/^\//, '')
-  const filePath = path.join(getSkinsDir(), fileName)
+  protocol.handle('app-file', async (request) => {
+    const url = new URL(request.url)
+    const fileName = decodeURIComponent(url.pathname).replace(/^\//, '')
+    const filePath = path.join(getSkinsDir(), fileName)
 
-  try {
-    const data = await fs.readFile(filePath)
-    return new Response(data, {
-      headers: {
-        'Cache-Control': 'no-store',
-      },
-    })
-  } catch {
-    return new Response(null, { status: 404 })
-  }
-})
+    try {
+      const data = await fs.readFile(filePath)
+      return new Response(data, {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      })
+    } catch {
+      return new Response(null, { status: 404 })
+    }
+  })
 }

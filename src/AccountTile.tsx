@@ -6,9 +6,10 @@ type Props = {
   isLoggedIn: boolean
   skinUrl: string
   onClick: () => void
+  isLoading?: boolean
 }
 
-export default function AccountTile({ username, isLoggedIn, skinUrl, onClick }: Props) {
+export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, isLoading = false }: Props) {
   const avatarCanvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -29,17 +30,32 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick }: 
 
   return (
     <button
-      onClick={isLoggedIn ? undefined : onClick}
-      className="flex items-center gap-3 w-full rounded-xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] transition-colors px-3 py-2.5 text-left"
+      onClick={isLoggedIn || isLoading ? undefined : onClick}
+      disabled={isLoading} // Блокируем клики во время загрузки
+      className={`flex items-center gap-3 w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 text-left transition-colors ${
+        isLoading ? 'cursor-default' : 'hover:bg-white/[0.06] cursor-pointer'
+      }`}
     >
-      <canvas ref={avatarCanvasRef} width={40} height={40} className="rounded-md shrink-0 bg-black/20" />
+      {/* Обертка сохраняет размер и фон заглушки, а сам canvas плавно появляется */}
+      <div className="relative w-10 h-10 shrink-0 rounded-md bg-black/20 overflow-hidden">
+        <canvas 
+          ref={avatarCanvasRef} 
+          width={40} 
+          height={40} 
+          className={`absolute inset-0 transition-opacity duration-300 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`} 
+        />
+      </div>
+      
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-white truncate">{username}</div>
         <div className="text-xs text-gray-500 truncate">
-          {isLoggedIn ? 'Microsoft аккаунт' : 'Нажмите, чтобы войти'}
+          {isLoading ? 'Проверка сессии...' : isLoggedIn ? 'Microsoft аккаунт' : 'Нажмите, чтобы войти'}
         </div>
       </div>
-      {isLoggedIn && <ChevronDown size={18} className="text-gray-500 shrink-0" />}
+      
+      {isLoggedIn && !isLoading && <ChevronDown size={18} className="text-gray-500 shrink-0" />}
     </button>
   )
 }

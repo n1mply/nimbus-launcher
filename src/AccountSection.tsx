@@ -28,8 +28,6 @@ function createShadowTexture(): CanvasTexture {
   return new CanvasTexture(canvas)
 }
 
-type Account = { username: string; skinUrl: string }
-
 export default function AccountSection() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -99,6 +97,7 @@ export default function AccountSection() {
         setAccount({
           username: result.profile.username,
           skinUrl: result.localSkinPath ? `app-file://skins/${result.localSkinPath}` : GUEST_SKIN,
+          capeUrl: result.activeCapeUrl, // Прямая ссылка на плащ (или null)
         })
       }
       setIsLoading(false)
@@ -107,7 +106,16 @@ export default function AccountSection() {
 
   // Как только account меняется (логин/логаут/восстановление) — обновляем скин на 3D-модели
   useEffect(() => {
-    viewerRef.current?.loadSkin(account?.skinUrl ?? GUEST_SKIN)
+    const viewer = viewerRef.current
+    if (!viewer) return
+    viewer.loadSkin(account?.skinUrl ?? GUEST_SKIN)
+
+    if (account?.capeUrl) {
+      viewer.loadCape(account.capeUrl)
+    } else {
+
+      viewer.loadCape(null)
+    }
   }, [account])
 
   const handleLogin = async () => {
@@ -116,6 +124,7 @@ export default function AccountSection() {
       setAccount({
         username: result.profile.username,
         skinUrl: result.localSkinPath ? `app-file://skins/${result.localSkinPath}` : GUEST_SKIN,
+        capeUrl: result.activeCapeUrl, // Прямая ссылка на плащ (или null)
       })
     }
   }
@@ -128,12 +137,16 @@ export default function AccountSection() {
           isLoggedIn={!!account}
           skinUrl={account?.skinUrl ?? GUEST_SKIN}
           onClick={handleLogin}
+          isLoading={isLoading}
         />
       </div>
 
       <div ref={containerRef} className="relative flex-1 min-h-0 w-full">
         <div className="absolute top-1/2 left-1/2 bg-gradient-to-b from-[#1E2029] to-[#14151C] -translate-x-1/2 -translate-y-1/2 h-full w-full rounded-xl pointer-events-none border border-white/5" />
-        <canvas ref={canvasRef} className="relative z-10 w-full h-full cursor-grab active:cursor-grabbing block" />
+        <canvas 
+          ref={canvasRef} 
+          className={`relative z-10 w-full h-full cursor-grab active:cursor-grabbing block transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`} 
+        />
       </div>
 
       <div className="flex flex-row justify-around gap-2 p-3 shrink-0 relative z-10 border border-white/5 bg-black/10 bg-gradient-to-b from-[#1E2029] to-[#14151C] rounded-xl">

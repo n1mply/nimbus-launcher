@@ -8,8 +8,8 @@ interface Window {
     invoke: (...args: any[]) => Promise<any>
   }
   auth: {
-    login: () => Promise<{ profile: { uuid: string; username: string }; skinDataUrl: string | null } | null>
-    restoreSession: () => Promise<{ profile: { uuid: string; username: string }; skinDataUrl: string | null } | null>
+    login: () => Promise<{ profile: { uuid: string; username: string }; skinDataUrl: string | null; activeCapeUrl: string | null } | null>
+    restoreSession: () => Promise<{ profile: { uuid: string; username: string }; skinDataUrl: string | null; activeCapeUrl: string | null } | null>
     logout: () => Promise<void>
   }
 }
