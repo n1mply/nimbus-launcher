@@ -1,7 +1,9 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+process.env.DEBUG = 'prismarine-auth'
+import { app, BrowserWindow, ipcMain, protocol } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import path from 'node:path'
+import { registerAppFileProtocol, registerAuthHandlers, setAuthMainWindow } from './auth'
+import path from 'node:path'  
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const require = createRequire(import.meta.url)
@@ -31,7 +33,10 @@ function createWindow(): void {
       preload: path.join(MAIN_DIST, 'preload.cjs'),
       sandbox: false
     }
-  })
+  }
+)
+  setAuthMainWindow(win)
+  registerAuthHandlers()
 
   ipcMain.on('window-control', (_, action: 'minimize' | 'maximize' | 'close') => {
     if (!win) return
@@ -82,4 +87,19 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app-file',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+])
+
+app.whenReady().then(() => {
+  registerAppFileProtocol()
+  createWindow()
+})

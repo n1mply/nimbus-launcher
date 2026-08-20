@@ -23,3 +23,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // You can expose other APTs you need here.
   // ...
 })
+
+contextBridge.exposeInMainWorld('auth', {
+  login: () => ipcRenderer.invoke('auth:login'),
+  restoreSession: () => ipcRenderer.invoke('auth:restore-session'),
+  logout: () => ipcRenderer.invoke('auth:logout'),
+})

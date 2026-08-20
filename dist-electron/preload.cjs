@@ -21,3 +21,8 @@ electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   // You can expose other APTs you need here.
   // ...
 });
+electron.contextBridge.exposeInMainWorld("auth", {
+  login: () => electron.ipcRenderer.invoke("auth:login"),
+  restoreSession: () => electron.ipcRenderer.invoke("auth:restore-session"),
+  logout: () => electron.ipcRenderer.invoke("auth:logout")
+});
