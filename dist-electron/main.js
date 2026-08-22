@@ -18578,6 +18578,41 @@ function getSkinsDir$1() {
 function getAuthCacheDir() {
   return path$1.join(app.getPath("userData"), "auth-cache");
 }
+function createAuthflow(onDeviceCode) {
+  return new prismarineAuth.Authflow(
+    "nimbus-launcher-user",
+    getAuthCacheDir(),
+    {
+      flow: "live",
+      authTitle: prismarineAuth.Titles.MinecraftNintendoSwitch,
+      deviceType: "Nintendo"
+    },
+    onDeviceCode
+  );
+}
+function notifyDeviceCode(deviceCode) {
+  mainWindowRef == null ? void 0 : mainWindowRef.webContents.send("auth:device-code", {
+    code: deviceCode.user_code,
+    url: deviceCode.verification_uri
+  });
+}
+async function getMinecraftAccessToken() {
+  const flow = createAuthflow(notifyDeviceCode);
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: false });
+  return result.token;
+}
+async function getMinecraftProfileCapes() {
+  var _a;
+  const flow = createAuthflow(notifyDeviceCode);
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: true });
+  const capes = ((_a = result.profile) == null ? void 0 : _a.capes) ?? [];
+  return capes.map((c) => ({
+    id: c.id,
+    name: c.alias ?? c.id,
+    url: c.url,
+    isActive: c.state === "ACTIVE"
+  }));
+}
 async function downloadAndSaveSkin(uuid, skinUrl) {
   await promises.mkdir(getSkinsDir$1(), { recursive: true });
   const res = await fetch(skinUrl);
@@ -18589,26 +18624,14 @@ async function downloadAndSaveSkin(uuid, skinUrl) {
 function loginWithPrismarine(showDeviceCodeUI) {
   return new Promise((resolve, reject) => {
     let codeWasShown = false;
-    const flow = new prismarineAuth.Authflow(
-      "nimbus-launcher-user",
-      getAuthCacheDir(),
-      {
-        flow: "live",
-        authTitle: prismarineAuth.Titles.MinecraftNintendoSwitch,
-        deviceType: "Nintendo"
-      },
-      (deviceCode) => {
-        codeWasShown = true;
-        if (!showDeviceCodeUI) {
-          reject(new Error("AUTH_REQUIRED"));
-          return;
-        }
-        mainWindowRef == null ? void 0 : mainWindowRef.webContents.send("auth:device-code", {
-          code: deviceCode.user_code,
-          url: deviceCode.verification_uri
-        });
+    const flow = createAuthflow((deviceCode) => {
+      codeWasShown = true;
+      if (!showDeviceCodeUI) {
+        reject(new Error("AUTH_REQUIRED"));
+        return;
       }
-    );
+      notifyDeviceCode(deviceCode);
+    });
     flow.getMinecraftJavaToken({ fetchProfile: true }).then(resolve).catch((err) => {
       if (!codeWasShown) reject(err);
     });
@@ -18670,16 +18693,44 @@ function registerAppFileProtocol() {
 function getSkinsDir() {
   return path$1.join(app.getPath("userData"), "skins");
 }
+async function uploadSkinToMojang(token, filePath, variant = "classic") {
+  const fileBuffer = await promises.readFile(filePath);
+  const formData = new FormData();
+  formData.append("variant", variant);
+  formData.append("file", new Blob([fileBuffer], { type: "image/png" }), "skin.png");
+  const res = await fetch("https://api.minecraftservices.com/minecraft/profile/skins", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`Mojang API error ${res.status}: ${errorText}`);
+  }
+}
 function registerSkinsHandlers() {
   ipcMain.handle("skins:get-all", async (_, uuid) => {
     const skinsDir = getSkinsDir();
     await promises.mkdir(skinsDir, { recursive: true });
     const files = await promises.readdir(skinsDir);
-    return files.filter((f) => f.endsWith(".png")).map((f) => ({
-      fileName: f,
-      isActive: f === `${uuid}.png`,
-      url: `app-file://skins/${f}`
-    })).sort((a, b) => a.isActive ? -1 : 1);
+    const pngFiles = files.filter((f) => f.endsWith(".png"));
+    const entries = await Promise.all(
+      pngFiles.map(async (f) => {
+        const stats = await promises.stat(path$1.join(skinsDir, f));
+        return {
+          fileName: f,
+          isActive: f === `${uuid}.png`,
+          // Версия по mtime в query-параметре: URL активного скина всегда
+          // один и тот же (`{uuid}.png`), но его содержимое подменяется при
+          // apply — без этого three.js/Chromium показывают закешированную
+          // по старому URL текстуру вместо реально актуального файла.
+          url: `app-file://skins/${f}?v=${stats.mtimeMs}`
+        };
+      })
+    );
+    return entries.sort((a, b) => a.isActive ? -1 : 1);
   });
   ipcMain.handle("skins:add", async (_, sourcePath) => {
     const skinsDir = getSkinsDir();
@@ -18697,13 +18748,54 @@ function registerSkinsHandlers() {
     const skinsDir = getSkinsDir();
     const currentActivePath = path$1.join(skinsDir, `${uuid}.png`);
     const newActivePath = path$1.join(skinsDir, newFileName);
+    let backupPath = null;
     try {
       await promises.access(currentActivePath);
       const backupName = `skin_backup_${Date.now()}.png`;
-      await promises.rename(currentActivePath, path$1.join(skinsDir, backupName));
+      backupPath = path$1.join(skinsDir, backupName);
+      await promises.rename(currentActivePath, backupPath);
     } catch {
     }
     await promises.rename(newActivePath, currentActivePath);
+    const now = /* @__PURE__ */ new Date();
+    await promises.utimes(currentActivePath, now, now);
+    try {
+      const token = await getMinecraftAccessToken();
+      await uploadSkinToMojang(token, currentActivePath);
+    } catch (err) {
+      await promises.rename(currentActivePath, newActivePath);
+      if (backupPath) {
+        await promises.rename(backupPath, currentActivePath);
+      }
+      throw err;
+    }
+    return true;
+  });
+}
+const CAPES_ACTIVE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile/capes/active";
+function registerCapesHandlers() {
+  ipcMain.handle("capes:get-all", async () => {
+    return getMinecraftProfileCapes();
+  });
+  ipcMain.handle("capes:apply", async (_, capeId) => {
+    const token = await getMinecraftAccessToken();
+    const res = capeId ? await fetch(CAPES_ACTIVE_ENDPOINT, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ capeId })
+    }) : await fetch(CAPES_ACTIVE_ENDPOINT, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      throw new Error(`Mojang API error ${res.status}: ${errorText}`);
+    }
     return true;
   });
 }
@@ -18789,6 +18881,7 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(() => {
   registerAppFileProtocol();
   registerSkinsHandlers();
+  registerCapesHandlers();
   createWindow();
 });
 export {

@@ -2,6 +2,7 @@ import { Authflow, Titles } from 'prismarine-auth'
 import { BrowserWindow, ipcMain, app, shell, protocol } from 'electron'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
+import { Cape } from './types'
 
 declare module 'prismarine-auth' {
   interface MicrosoftAuthFlowOptions {
@@ -23,6 +24,59 @@ function getAuthCacheDir(): string {
   return path.join(app.getPath('userData'), 'auth-cache')
 }
 
+// Единая точка создания Authflow — используется и для полноценного логина,
+// и там, где нужен просто актуальный токен (например, при аплоаде скина).
+// Параметры (username + cacheDir) те же самые, поэтому prismarine-auth
+// подхватывает уже существующую сессию с диска и тихо обновляет токен,
+// не требуя повторного входа, пока жив refresh-токен.
+function createAuthflow(onDeviceCode?: (deviceCode: { user_code: string; verification_uri: string }) => void): Authflow {
+  return new Authflow(
+    'nimbus-launcher-user',
+    getAuthCacheDir(),
+    {
+      flow: 'live',
+      authTitle: Titles.MinecraftNintendoSwitch,
+      deviceType: 'Nintendo',
+    },
+    onDeviceCode
+  )
+}
+
+// Коллбэк, который показывает модалку с device-code — переиспользуется
+// везде, где может понадобиться тихая переавторизация без полноценного логина.
+function notifyDeviceCode(deviceCode: { user_code: string; verification_uri: string }): void {
+  mainWindowRef?.webContents.send('auth:device-code', {
+    code: deviceCode.user_code,
+    url: deviceCode.verification_uri,
+  })
+}
+
+// Возвращает актуальный Minecraft access-токен для похода в minecraftservices.com API
+// (например, для загрузки скина). Если сессия по какой-то причине требует
+// повторной авторизации, показываем ту же device-code модалку, что и при логине.
+export async function getMinecraftAccessToken(): Promise<string> {
+  const flow = createAuthflow(notifyDeviceCode)
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: false })
+  return result.token
+}
+
+// Список плащей, которыми владеет аккаунт (выдаются Mojang за ачивменты/события,
+// пользователь не может их создавать сам — только выбирать из уже имеющихся
+// или снимать текущий). fetchProfile: true подтягивает полный профиль,
+// включая массив capes с состоянием ACTIVE/INACTIVE у каждого.
+export async function getMinecraftProfileCapes(): Promise<Cape[]> {
+  const flow = createAuthflow(notifyDeviceCode)
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: true })
+  const capes = result.profile?.capes ?? []
+
+  return capes.map((c: any) => ({
+    id: c.id,
+    name: c.alias ?? c.id,
+    url: c.url,
+    isActive: c.state === 'ACTIVE',
+  }))
+}
+
 async function downloadAndSaveSkin(uuid: string, skinUrl: string): Promise<string> {
   await fs.mkdir(getSkinsDir(), { recursive: true })
   const res = await fetch(skinUrl)
@@ -39,26 +93,14 @@ function loginWithPrismarine(showDeviceCodeUI: boolean) {
   return new Promise<any>((resolve, reject) => {
     let codeWasShown = false
 
-    const flow = new Authflow(
-      'nimbus-launcher-user',
-      getAuthCacheDir(),
-      {
-        flow: 'live',
-        authTitle: Titles.MinecraftNintendoSwitch,
-        deviceType: 'Nintendo',
-      },
-      (deviceCode) => {
-        codeWasShown = true
-        if (!showDeviceCodeUI) {
-          reject(new Error('AUTH_REQUIRED'))
-          return
-        }
-        mainWindowRef?.webContents.send('auth:device-code', {
-          code: deviceCode.user_code,
-          url: deviceCode.verification_uri,
-        })
+    const flow = createAuthflow((deviceCode) => {
+      codeWasShown = true
+      if (!showDeviceCodeUI) {
+        reject(new Error('AUTH_REQUIRED'))
+        return
       }
-    )
+      notifyDeviceCode(deviceCode)
+    })
 
     flow
       .getMinecraftJavaToken({ fetchProfile: true })

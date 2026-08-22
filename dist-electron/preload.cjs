@@ -32,3 +32,7 @@ electron.contextBridge.exposeInMainWorld("skins", {
   delete: (fileName) => electron.ipcRenderer.invoke("skins:delete", fileName),
   apply: (uuid, fileName) => electron.ipcRenderer.invoke("skins:apply", uuid, fileName)
 });
+electron.contextBridge.exposeInMainWorld("capes", {
+  getAll: () => electron.ipcRenderer.invoke("capes:get-all"),
+  apply: (capeId) => electron.ipcRenderer.invoke("capes:apply", capeId)
+});

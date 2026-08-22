@@ -36,3 +36,8 @@ contextBridge.exposeInMainWorld('skins', {
   delete: (fileName: string) => ipcRenderer.invoke('skins:delete', fileName),
   apply: (uuid: string, fileName: string) => ipcRenderer.invoke('skins:apply', uuid, fileName),
 })
+
+contextBridge.exposeInMainWorld('capes', {
+  getAll: () => ipcRenderer.invoke('capes:get-all'),
+  apply: (capeId: string | null) => ipcRenderer.invoke('capes:apply', capeId),
+})

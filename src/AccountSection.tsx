@@ -5,7 +5,8 @@ import SidebarItem from './SidebarItem'
 import AccountTile from './AccountTile'
 import DeviceCodeModal from './DiviceCodeModal'
 import CustomModal from './CustomModal'
-import SkinsModal from './SkinsModal' // Импортируем нашу новую модалку
+import SkinsModal from './SkinsModal'
+import CapesModal from './CapesModal'
 import { Shirt, Scroll } from 'lucide-react'
 import { Account } from './types'
 
@@ -96,7 +97,7 @@ export default function AccountSection() {
     window.auth.restoreSession().then((result) => {
       if (result) {
         setAccount({
-          uuid: result.profile.uuid, // Сохраняем UUID
+          uuid: result.profile.uuid,
           username: result.profile.username,
           skinUrl: result.localSkinPath ? `app-file://skins/${result.localSkinPath}` : GUEST_SKIN,
           capeUrl: result.activeCapeUrl,
@@ -123,7 +124,7 @@ export default function AccountSection() {
     const result = await window.auth.login()
     if (result) {
       setAccount({
-        uuid: result.profile.uuid, // Сохраняем UUID
+        uuid: result.profile.uuid,
         username: result.profile.username,
         skinUrl: result.localSkinPath ? `app-file://skins/${result.localSkinPath}` : GUEST_SKIN,
         capeUrl: result.activeCapeUrl,
@@ -137,6 +138,13 @@ export default function AccountSection() {
     // Файл называется так же (uuid.png), но браузер скачает его заново.
     const updatedSkinUrl = `app-file://skins/${account.uuid}.png?t=${Date.now()}`
     setAccount({ ...account, skinUrl: updatedSkinUrl })
+  }
+
+  // Плащи раздаёт Mojang и хранит их у себя — URL плаща уникален для его
+  // содержимого (в отличие от скинов), так что подмена кеша тут не нужна:
+  // просто подставляем новый URL (или null, если плащ сняли).
+  const handleCapeChanged = (newCapeUrl: string | null) => {
+    setAccount((prev) => (prev ? { ...prev, capeUrl: newCapeUrl } : prev))
   }
 
   return (
@@ -164,6 +172,7 @@ export default function AccountSection() {
         <SidebarItem icon={<Scroll size={24} />} isSelected={false} onClick={() => setOpenCapes(true)} />
       </div>
 
+      {/* Интеграция библиотеки скинов */}
       {account?.uuid ? (
         <SkinsModal 
           isOpen={isOpenSkins} 
@@ -179,9 +188,20 @@ export default function AccountSection() {
         </CustomModal>
       )}
 
-      <CustomModal isOpen={isOpenCapes} onClose={() => setOpenCapes(false)} size="medium" title="Your Capes">
-        <p className="text-sm text-gray-400">Select a different cape or remove the current one</p>
-      </CustomModal>
+      {/* Интеграция плащей */}
+      {account?.uuid ? (
+        <CapesModal
+          isOpen={isOpenCapes}
+          onClose={() => setOpenCapes(false)}
+          onCapeChanged={handleCapeChanged}
+        />
+      ) : (
+        <CustomModal isOpen={isOpenCapes} onClose={() => setOpenCapes(false)} size="small" title="Your Capes">
+          <div className="flex items-center justify-center h-32">
+            <p className="text-sm text-gray-400">Sing in to able to change capes</p>
+          </div>
+        </CustomModal>
+      )}
 
       <DeviceCodeModal />
     </div>

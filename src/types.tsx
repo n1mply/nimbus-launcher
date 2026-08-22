@@ -12,3 +12,10 @@ export type LibrarySkin = {
   isActive: boolean;
   url: string;
 }
+
+export type Cape = {
+  id: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+}

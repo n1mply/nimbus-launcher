@@ -16,6 +16,7 @@ export default function SkinsModal({ isOpen, onClose, uuid, onSkinChanged }: Pro
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -28,22 +29,27 @@ export default function SkinsModal({ isOpen, onClose, uuid, onSkinChanged }: Pro
     if (isOpen) {
       loadSkins()
       setSelectedFile(null)
+      setApplyError(null)
     }
   }, [isOpen])
 
+  // Обработка импорта (общая для DnD и клика)
   const processFilePath = async (filePath: string) => {
     await window.skins.add(filePath)
     loadSkins()
   }
 
+  // Выбор файла через проводник
   const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.type === 'image/png') {
       await processFilePath((file as any).path)
     }
+    // Сбрасываем значение, чтобы можно было повторно выбрать тот же файл
     e.target.value = ''
   }
 
+  // Перетаскивание файлов
   const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(false)
@@ -63,13 +69,18 @@ export default function SkinsModal({ isOpen, onClose, uuid, onSkinChanged }: Pro
   const handleApply = async () => {
     if (!selectedFile || isApplying) return
     setIsApplying(true)
-    
-    await window.skins.apply(uuid, selectedFile)
-    await loadSkins()
-    
-    setIsApplying(false)
-    setSelectedFile(null)
-    onSkinChanged()
+    setApplyError(null)
+
+    try {
+      await window.skins.apply(uuid, selectedFile)
+      await loadSkins()
+      setSelectedFile(null)
+      onSkinChanged()
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : 'Failed to apply skin')
+    } finally {
+      setIsApplying(false)
+    }
   }
 
   const hasChanges = selectedFile !== null && !skins.find(s => s.fileName === selectedFile)?.isActive
@@ -114,7 +125,10 @@ export default function SkinsModal({ isOpen, onClose, uuid, onSkinChanged }: Pro
         ))}
       </div>
 
-      <div className="mt-6 flex justify-end pt-4 border-t border-white/10">
+      <div className="mt-6 flex flex-col items-end gap-2 pt-4 border-t border-white/10">
+        {applyError && (
+          <p className="text-xs text-red-400 text-right">{applyError}</p>
+        )}
         <button
           onClick={handleApply}
           disabled={!hasChanges || isApplying}
