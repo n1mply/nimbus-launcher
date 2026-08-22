@@ -5,11 +5,11 @@ import SidebarItem from './SidebarItem'
 import AccountTile from './AccountTile'
 import DeviceCodeModal from './DiviceCodeModal'
 import CustomModal from './CustomModal'
+import SkinsModal from './SkinsModal' // Импортируем нашу новую модалку
 import { Shirt, Scroll } from 'lucide-react'
 import { Account } from './types'
 
 const GUEST_SKIN = '/user_skin.png'
-
 
 function createShadowTexture(): CanvasTexture {
   const size = 128
@@ -35,6 +35,7 @@ export default function AccountSection() {
 
   const [account, setAccount] = useState<Account | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isOpenSkins, setOpenSkins] = useState(false)
   const [isOpenCapes, setOpenCapes] = useState(false)
 
   // Инициализация 3D-вьюера — один раз при монтировании компонента
@@ -95,16 +96,17 @@ export default function AccountSection() {
     window.auth.restoreSession().then((result) => {
       if (result) {
         setAccount({
+          uuid: result.profile.uuid, // Сохраняем UUID
           username: result.profile.username,
           skinUrl: result.localSkinPath ? `app-file://skins/${result.localSkinPath}` : GUEST_SKIN,
-          capeUrl: result.activeCapeUrl, // Прямая ссылка на плащ (или null)
+          capeUrl: result.activeCapeUrl,
         })
       }
       setIsLoading(false)
     })
   }, [])
 
-  // Как только account меняется (логин/логаут/восстановление) — обновляем скин на 3D-модели
+  // Как только account меняется (логин/логаут/восстановление/смена скина) — обновляем 3D-модель
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer) return
@@ -113,7 +115,6 @@ export default function AccountSection() {
     if (account?.capeUrl) {
       viewer.loadCape(account.capeUrl)
     } else {
-
       viewer.loadCape(null)
     }
   }, [account])
@@ -122,11 +123,20 @@ export default function AccountSection() {
     const result = await window.auth.login()
     if (result) {
       setAccount({
+        uuid: result.profile.uuid, // Сохраняем UUID
         username: result.profile.username,
         skinUrl: result.localSkinPath ? `app-file://skins/${result.localSkinPath}` : GUEST_SKIN,
-        capeUrl: result.activeCapeUrl, // Прямая ссылка на плащ (или null)
+        capeUrl: result.activeCapeUrl,
       })
     }
+  }
+
+  const handleSkinChanged = () => {
+    if (!account?.uuid) return
+    // Принудительно сбрасываем кэш, добавляя параметр времени к URL.
+    // Файл называется так же (uuid.png), но браузер скачает его заново.
+    const updatedSkinUrl = `app-file://skins/${account.uuid}.png?t=${Date.now()}`
+    setAccount({ ...account, skinUrl: updatedSkinUrl })
   }
 
   return (
@@ -150,12 +160,27 @@ export default function AccountSection() {
       </div>
 
       <div className="flex flex-row justify-around gap-2 p-3 shrink-0 relative z-10 border border-white/5 bg-black/10 bg-gradient-to-b from-[#1E2029] to-[#14151C] rounded-xl">
-        <SidebarItem icon={<Shirt size={24} />} isSelected={false} />
+        <SidebarItem icon={<Shirt size={24} />} isSelected={false} onClick={() => setOpenSkins(true)}/>
         <SidebarItem icon={<Scroll size={24} />} isSelected={false} onClick={() => setOpenCapes(true)} />
       </div>
 
+      {account?.uuid ? (
+        <SkinsModal 
+          isOpen={isOpenSkins} 
+          onClose={() => setOpenSkins(false)} 
+          uuid={account.uuid}
+          onSkinChanged={handleSkinChanged} 
+        />
+      ) : (
+        <CustomModal isOpen={isOpenSkins} onClose={() => setOpenSkins(false)} size="small" title="Skins Library">
+          <div className="flex items-center justify-center h-32">
+            <p className="text-sm text-gray-400">Sing in to able to change skins</p>
+          </div>
+        </CustomModal>
+      )}
+
       <CustomModal isOpen={isOpenCapes} onClose={() => setOpenCapes(false)} size="medium" title="Your Capes">
-        <p className="text-sm text-gray-400">Тут будет форма настроек инстанса</p>
+        <p className="text-sm text-gray-400">Select a different cape or remove the current one</p>
       </CustomModal>
 
       <DeviceCodeModal />

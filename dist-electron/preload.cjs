@@ -26,3 +26,9 @@ electron.contextBridge.exposeInMainWorld("auth", {
   restoreSession: () => electron.ipcRenderer.invoke("auth:restore-session"),
   logout: () => electron.ipcRenderer.invoke("auth:logout")
 });
+electron.contextBridge.exposeInMainWorld("skins", {
+  getAll: (uuid) => electron.ipcRenderer.invoke("skins:get-all", uuid),
+  add: (sourcePath) => electron.ipcRenderer.invoke("skins:add", sourcePath),
+  delete: (fileName) => electron.ipcRenderer.invoke("skins:delete", fileName),
+  apply: (uuid, fileName) => electron.ipcRenderer.invoke("skins:apply", uuid, fileName)
+});

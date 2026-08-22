@@ -14,6 +14,7 @@ import require$$1$1 from "https";
 import require$$3 from "stream";
 import path$1 from "node:path";
 import { promises } from "node:fs";
+import crypto$7 from "node:crypto";
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getAugmentedNamespace(n) {
   if (n.__esModule) return n;
@@ -18571,17 +18572,17 @@ let mainWindowRef = null;
 function setAuthMainWindow(win2) {
   mainWindowRef = win2;
 }
-function getSkinsDir() {
+function getSkinsDir$1() {
   return path$1.join(app.getPath("userData"), "skins");
 }
 function getAuthCacheDir() {
   return path$1.join(app.getPath("userData"), "auth-cache");
 }
 async function downloadAndSaveSkin(uuid, skinUrl) {
-  await promises.mkdir(getSkinsDir(), { recursive: true });
+  await promises.mkdir(getSkinsDir$1(), { recursive: true });
   const res = await fetch(skinUrl);
   const buffer = Buffer.from(await res.arrayBuffer());
-  const filePath = path$1.join(getSkinsDir(), `${uuid}.png`);
+  const filePath = path$1.join(getSkinsDir$1(), `${uuid}.png`);
   await promises.writeFile(filePath, buffer);
   return `${uuid}.png`;
 }
@@ -18653,7 +18654,7 @@ function registerAppFileProtocol() {
   protocol.handle("app-file", async (request) => {
     const url = new URL(request.url);
     const fileName = decodeURIComponent(url.pathname).replace(/^\//, "");
-    const filePath = path$1.join(getSkinsDir(), fileName);
+    const filePath = path$1.join(getSkinsDir$1(), fileName);
     try {
       const data = await promises.readFile(filePath);
       return new Response(data, {
@@ -18664,6 +18665,46 @@ function registerAppFileProtocol() {
     } catch {
       return new Response(null, { status: 404 });
     }
+  });
+}
+function getSkinsDir() {
+  return path$1.join(app.getPath("userData"), "skins");
+}
+function registerSkinsHandlers() {
+  ipcMain.handle("skins:get-all", async (_, uuid) => {
+    const skinsDir = getSkinsDir();
+    await promises.mkdir(skinsDir, { recursive: true });
+    const files = await promises.readdir(skinsDir);
+    return files.filter((f) => f.endsWith(".png")).map((f) => ({
+      fileName: f,
+      isActive: f === `${uuid}.png`,
+      url: `app-file://skins/${f}`
+    })).sort((a, b) => a.isActive ? -1 : 1);
+  });
+  ipcMain.handle("skins:add", async (_, sourcePath) => {
+    const skinsDir = getSkinsDir();
+    const uniqueName = `skin_${Date.now()}_${crypto$7.randomBytes(4).toString("hex")}.png`;
+    const destPath = path$1.join(skinsDir, uniqueName);
+    await promises.copyFile(sourcePath, destPath);
+    return true;
+  });
+  ipcMain.handle("skins:delete", async (_, fileName) => {
+    const filePath = path$1.join(getSkinsDir(), fileName);
+    await promises.unlink(filePath);
+    return true;
+  });
+  ipcMain.handle("skins:apply", async (_, uuid, newFileName) => {
+    const skinsDir = getSkinsDir();
+    const currentActivePath = path$1.join(skinsDir, `${uuid}.png`);
+    const newActivePath = path$1.join(skinsDir, newFileName);
+    try {
+      await promises.access(currentActivePath);
+      const backupName = `skin_backup_${Date.now()}.png`;
+      await promises.rename(currentActivePath, path$1.join(skinsDir, backupName));
+    } catch {
+    }
+    await promises.rename(newActivePath, currentActivePath);
+    return true;
   });
 }
 process.env.DEBUG = "prismarine-auth";
@@ -18747,6 +18788,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 app.whenReady().then(() => {
   registerAppFileProtocol();
+  registerSkinsHandlers();
   createWindow();
 });
 export {

@@ -29,3 +29,10 @@ contextBridge.exposeInMainWorld('auth', {
   restoreSession: () => ipcRenderer.invoke('auth:restore-session'),
   logout: () => ipcRenderer.invoke('auth:logout'),
 })
+
+contextBridge.exposeInMainWorld('skins', {
+  getAll: (uuid: string) => ipcRenderer.invoke('skins:get-all', uuid),
+  add: (sourcePath: string) => ipcRenderer.invoke('skins:add', sourcePath),
+  delete: (fileName: string) => ipcRenderer.invoke('skins:delete', fileName),
+  apply: (uuid: string, fileName: string) => ipcRenderer.invoke('skins:apply', uuid, fileName),
+})

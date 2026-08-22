@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, protocol } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { registerAppFileProtocol, registerAuthHandlers, setAuthMainWindow } from './auth'
+import { registerSkinsHandlers } from './skins'
 import path from 'node:path'  
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -101,5 +102,6 @@ protocol.registerSchemesAsPrivileged([
 
 app.whenReady().then(() => {
   registerAppFileProtocol()
+  registerSkinsHandlers()
   createWindow()
 })

@@ -31,12 +31,11 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, is
   return (
     <button
       onClick={isLoggedIn || isLoading ? undefined : onClick}
-      disabled={isLoading} // Блокируем клики во время загрузки
+      disabled={isLoading}
       className={`flex items-center gap-3 w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 text-left transition-colors ${
         isLoading ? 'cursor-default' : 'hover:bg-white/[0.06] cursor-pointer'
       }`}
     >
-      {/* Обертка сохраняет размер и фон заглушки, а сам canvas плавно появляется */}
       <div className="relative w-10 h-10 shrink-0 rounded-md bg-black/20 overflow-hidden">
         <canvas 
           ref={avatarCanvasRef} 
@@ -51,7 +50,7 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, is
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-white truncate">{username}</div>
         <div className="text-xs text-gray-500 truncate">
-          {isLoading ? 'Проверка сессии...' : isLoggedIn ? 'Microsoft аккаунт' : 'Нажмите, чтобы войти'}
+          {isLoading ? 'Findind session...' : isLoggedIn ? 'Microsoft account' : 'Click to sign in'}
         </div>
       </div>
       

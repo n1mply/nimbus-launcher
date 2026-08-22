@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
-type ModalSize = 'small' | 'medium'
+type ModalSize = 'small' | 'medium' | 'large'
 
 type Props = {
   isOpen: boolean
@@ -17,6 +17,7 @@ type Props = {
 const sizeClasses: Record<ModalSize, string> = {
   small: 'w-[420px] max-h-[260px]',
   medium: 'w-[480px] max-h-[640px]',
+  large: 'w-[680px] max-h-[800px]'
 }
 
 const ANIMATION_DURATION = 200 // мс, совпадает с длительностью transition в классах ниже
