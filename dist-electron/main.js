@@ -18596,22 +18596,54 @@ function notifyDeviceCode(deviceCode) {
     url: deviceCode.verification_uri
   });
 }
-async function getMinecraftAccessToken() {
-  const flow = createAuthflow(notifyDeviceCode);
-  const result = await flow.getMinecraftJavaToken({ fetchProfile: false });
-  return result.token;
+let sharedFlow = null;
+function getSharedAuthflow() {
+  if (!sharedFlow) {
+    sharedFlow = createAuthflow(notifyDeviceCode);
+  }
+  return sharedFlow;
 }
-async function getMinecraftProfileCapes() {
-  var _a;
-  const flow = createAuthflow(notifyDeviceCode);
-  const result = await flow.getMinecraftJavaToken({ fetchProfile: true });
-  const capes = ((_a = result.profile) == null ? void 0 : _a.capes) ?? [];
-  return capes.map((c) => ({
+function capesFromProfile(profile) {
+  return (profile.capes ?? []).map((c) => ({
     id: c.id,
     name: c.alias ?? c.id,
     url: c.url,
     isActive: c.state === "ACTIVE"
   }));
+}
+let capesSnapshot = null;
+let capesFetchInFlight = null;
+const MIN_CAPES_REFRESH_INTERVAL_MS = 3e4;
+async function fetchFreshCapesSnapshot() {
+  const flow = getSharedAuthflow();
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: true });
+  if (!result.profile) {
+    throw new Error("Не удалось получить профиль аккаунта для списка плащей");
+  }
+  return { capes: capesFromProfile(result.profile), fetchedAt: Date.now() };
+}
+async function getMinecraftAccessToken() {
+  const flow = getSharedAuthflow();
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: false });
+  return result.token;
+}
+async function getMinecraftProfileCapes(forceRefresh = false) {
+  const isFresh = capesSnapshot && Date.now() - capesSnapshot.fetchedAt < MIN_CAPES_REFRESH_INTERVAL_MS;
+  if (!forceRefresh && isFresh) {
+    return capesSnapshot.capes;
+  }
+  if (!capesFetchInFlight) {
+    capesFetchInFlight = fetchFreshCapesSnapshot().finally(() => {
+      capesFetchInFlight = null;
+    });
+  }
+  try {
+    capesSnapshot = await capesFetchInFlight;
+  } catch (err) {
+    if (capesSnapshot) return capesSnapshot.capes;
+    throw err;
+  }
+  return capesSnapshot.capes;
 }
 async function downloadAndSaveSkin(uuid, skinUrl) {
   await promises.mkdir(getSkinsDir$1(), { recursive: true });
@@ -18632,7 +18664,10 @@ function loginWithPrismarine(showDeviceCodeUI) {
       }
       notifyDeviceCode(deviceCode);
     });
-    flow.getMinecraftJavaToken({ fetchProfile: true }).then(resolve).catch((err) => {
+    flow.getMinecraftJavaToken({ fetchProfile: true }).then((result) => {
+      sharedFlow = flow;
+      resolve(result);
+    }).catch((err) => {
       if (!codeWasShown) reject(err);
     });
   });
@@ -18647,6 +18682,7 @@ async function processLoginResult(result) {
   }
   const activeCape = (_c = profile.capes) == null ? void 0 : _c.find((c) => c.state === "ACTIVE");
   const activeCapeUrl = (activeCape == null ? void 0 : activeCape.url) ?? null;
+  capesSnapshot = { capes: capesFromProfile(profile), fetchedAt: Date.now() };
   return {
     profile: { uuid: profile.id, username: profile.name },
     localSkinPath,
@@ -18774,8 +18810,8 @@ function registerSkinsHandlers() {
 }
 const CAPES_ACTIVE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile/capes/active";
 function registerCapesHandlers() {
-  ipcMain.handle("capes:get-all", async () => {
-    return getMinecraftProfileCapes();
+  ipcMain.handle("capes:get-all", async (_, forceRefresh) => {
+    return getMinecraftProfileCapes(!!forceRefresh);
   });
   ipcMain.handle("capes:apply", async (_, capeId) => {
     const token = await getMinecraftAccessToken();

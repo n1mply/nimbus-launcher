@@ -38,6 +38,6 @@ contextBridge.exposeInMainWorld('skins', {
 })
 
 contextBridge.exposeInMainWorld('capes', {
-  getAll: () => ipcRenderer.invoke('capes:get-all'),
+  getAll: (forceRefresh?: boolean) => ipcRenderer.invoke('capes:get-all', forceRefresh),
   apply: (capeId: string | null) => ipcRenderer.invoke('capes:apply', capeId),
 })

@@ -5,10 +5,12 @@ const CAPES_ACTIVE_ENDPOINT = 'https://api.minecraftservices.com/minecraft/profi
 
 export function registerCapesHandlers(): void {
   // Список плащей, которыми владеет аккаунт. В отличие от скинов, плащи
-  // не хранятся локально и не создаются пользователем — их выдаёт Mojang,
-  // поэтому просто каждый раз запрашиваем актуальный список через профиль.
-  ipcMain.handle('capes:get-all', async () => {
-    return getMinecraftProfileCapes()
+  // не хранятся локально и не создаются пользователем — их выдаёт Mojang.
+  // По умолчанию отдаём из in-memory кеша (см. getMinecraftProfileCapes) —
+  // это не сетевой запрос, если кеш ещё свежий. forceRefresh=true (после
+  // apply) гарантирует обращение к серверу, игнорируя троттлинг.
+  ipcMain.handle('capes:get-all', async (_, forceRefresh?: boolean) => {
+    return getMinecraftProfileCapes(!!forceRefresh)
   })
 
   // capeId === null -> снять текущий плащ (DELETE)

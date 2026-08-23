@@ -8,8 +8,6 @@ type Props = {
   onClick: () => void
 }
 
-// Текстура плаща — это развёртка 3D-бокса 64x32 (верх/низ/перед/бок/зад),
-// как и у скина. Для превью берём грань "Front" — x=1, y=1, размер 10x16.
 const CAPE_FRONT_REGION = { x: 1, y: 1, width: 10, height: 16 }
 
 export default function CapeTile({ capeUrl, name, isActive, isSelected, onClick }: Props) {

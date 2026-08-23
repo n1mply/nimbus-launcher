@@ -51,30 +51,96 @@ function notifyDeviceCode(deviceCode: { user_code: string; verification_uri: str
   })
 }
 
+// Единственный переиспользуемый Authflow-инстанс на весь main-процесс.
+// Раньше каждый вызов (открытие модалки плащей, apply скина, логин)
+// создавал НОВЫЙ Authflow — а это заново гоняет цепочку MSA → XSTS →
+// Xbox Live → Minecraft Services, у которой свой rate limit на стороне
+// Microsoft. Переиспользование одного инстанса резко сокращает число
+// таких обращений — internal token-менеджеры Authflow сами кешируют
+// валидные токены и не лезут в сеть, пока они не протухли.
+let sharedFlow: Authflow | null = null
+
+function getSharedAuthflow(): Authflow {
+  if (!sharedFlow) {
+    sharedFlow = createAuthflow(notifyDeviceCode)
+  }
+  return sharedFlow
+}
+
+function capesFromProfile(profile: any): Cape[] {
+  return (profile.capes ?? []).map((c: any) => ({
+    id: c.id,
+    name: c.alias ?? c.id,
+    url: c.url,
+    isActive: c.state === 'ACTIVE',
+  }))
+}
+
+// In-memory снимок плащей из последнего успешного профиля + время получения.
+// Прогревается прямо из логина/restoreSession (там и так уже есть полный
+// профиль — грех не переиспользовать), а дальше троттлится: пока данные
+// не старше MIN_REFRESH_INTERVAL_MS, повторный запрос вообще не идёт в сеть.
+type CapesSnapshot = { capes: Cape[]; fetchedAt: number }
+
+let capesSnapshot: CapesSnapshot | null = null
+let capesFetchInFlight: Promise<CapesSnapshot> | null = null
+
+const MIN_CAPES_REFRESH_INTERVAL_MS = 30_000
+
+async function fetchFreshCapesSnapshot(): Promise<CapesSnapshot> {
+  const flow = getSharedAuthflow()
+  const result = await flow.getMinecraftJavaToken({ fetchProfile: true })
+
+  if (!result.profile) {
+    throw new Error('Не удалось получить профиль аккаунта для списка плащей')
+  }
+
+  return { capes: capesFromProfile(result.profile), fetchedAt: Date.now() }
+}
+
 // Возвращает актуальный Minecraft access-токен для похода в minecraftservices.com API
-// (например, для загрузки скина). Если сессия по какой-то причине требует
-// повторной авторизации, показываем ту же device-code модалку, что и при логине.
+// (например, для загрузки скина). Переиспользует общий Authflow — токен
+// в нём уже закеширован в памяти, если недавно логинились/делали другие запросы.
 export async function getMinecraftAccessToken(): Promise<string> {
-  const flow = createAuthflow(notifyDeviceCode)
+  const flow = getSharedAuthflow()
   const result = await flow.getMinecraftJavaToken({ fetchProfile: false })
   return result.token
 }
 
 // Список плащей, которыми владеет аккаунт (выдаются Mojang за ачивменты/события,
 // пользователь не может их создавать сам — только выбирать из уже имеющихся
-// или снимать текущий). fetchProfile: true подтягивает полный профиль,
-// включая массив capes с состоянием ACTIVE/INACTIVE у каждого.
-export async function getMinecraftProfileCapes(): Promise<Cape[]> {
-  const flow = createAuthflow(notifyDeviceCode)
-  const result = await flow.getMinecraftJavaToken({ fetchProfile: true })
-  const capes = result.profile?.capes ?? []
+// или снимать текущий).
+//
+// forceRefresh=false (по умолчанию): если в памяти уже есть снимок младше
+// MIN_CAPES_REFRESH_INTERVAL_MS — отдаём его без единого сетевого запроса.
+// forceRefresh=true: используется после apply, где нужны гарантированно
+// актуальные данные, даже если недавно уже обновлялись.
+export async function getMinecraftProfileCapes(forceRefresh = false): Promise<Cape[]> {
+  const isFresh = capesSnapshot && Date.now() - capesSnapshot.fetchedAt < MIN_CAPES_REFRESH_INTERVAL_MS
 
-  return capes.map((c: any) => ({
-    id: c.id,
-    name: c.alias ?? c.id,
-    url: c.url,
-    isActive: c.state === 'ACTIVE',
-  }))
+  if (!forceRefresh && isFresh) {
+    return capesSnapshot!.capes
+  }
+
+  // Если несколько вызовов пришли одновременно (например, несколько
+  // компонентов дёрнули запрос почти в один момент) — не плодим
+  // параллельные сетевые запросы, а переиспользуем один "в полёте".
+  if (!capesFetchInFlight) {
+    capesFetchInFlight = fetchFreshCapesSnapshot().finally(() => {
+      capesFetchInFlight = null
+    })
+  }
+
+  try {
+    capesSnapshot = await capesFetchInFlight
+  } catch (err) {
+    // Обновление не удалось (сеть/рейт-лимит), но старый снимок ещё жив —
+    // лучше отдать чуть устаревшие данные, чем остаться совсем без списка.
+    if (capesSnapshot) return capesSnapshot.capes
+    throw err
+  }
+
+  return capesSnapshot.capes
 }
 
 async function downloadAndSaveSkin(uuid: string, skinUrl: string): Promise<string> {
@@ -104,7 +170,12 @@ function loginWithPrismarine(showDeviceCodeUI: boolean) {
 
     flow
       .getMinecraftJavaToken({ fetchProfile: true })
-      .then(resolve)
+      .then((result) => {
+        // Переиспользуем этот же инстанс дальше — он уже прошёл полную
+        // цепочку авторизации, не нужно создавать новый для скинов/плащей.
+        sharedFlow = flow
+        resolve(result)
+      })
       .catch((err) => {
         if (!codeWasShown) reject(err)
         
@@ -124,6 +195,10 @@ async function processLoginResult(result: any) {
   const activeCape = profile.capes?.find((c: any) => c.state === 'ACTIVE')
   
   const activeCapeUrl: string | null = activeCape?.url ?? null
+
+  // Профиль уже получен целиком (в том числе капы) — прогреваем кеш,
+  // чтобы первое открытие модалки плащей не делало отдельный запрос.
+  capesSnapshot = { capes: capesFromProfile(profile), fetchedAt: Date.now() }
 
   return {
     profile: { uuid: profile.id, username: profile.name },
