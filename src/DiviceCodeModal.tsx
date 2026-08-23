@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import CustomModal from './CustomModal'
+import { MorphIcon } from 'morphicons/react' 
+import { Clipboard, Check } from 'lucide'
 
 export default function DeviceCodeModal() {
   const [deviceCode, setDeviceCode] = useState<{ code: string; url: string } | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   useEffect(() => {
     const handler = (_event: unknown, data: { code: string; url: string }) => {
@@ -17,12 +20,10 @@ export default function DeviceCodeModal() {
   useEffect(() => {
     if (!deviceCode) {
       setQrDataUrl(null)
+      setIsCopied(false)
       return
     }
 
-    // Прошиваем в QR не голую ссылку, а ссылку с уже подставленным кодом.
-    // Параметр otc ("one-time code") — Microsoft сам подхватывает его на странице
-    // microsoft.com/link и вводит код автоматически, без ручного набора.
     const prefilledUrl = new URL(deviceCode.url)
     prefilledUrl.searchParams.set('otc', deviceCode.code)
 
@@ -31,15 +32,25 @@ export default function DeviceCodeModal() {
 
   const handleOpenLink = () => {
     if (!deviceCode) return
-    // invoke, а не send — на стороне main зарегистрирован именно ipcMain.handle
     window.ipcRenderer.invoke('shell:open-external', deviceCode.url)
   }
 
+  const handleCopy = async () => {
+    if (!deviceCode) return
+    try {
+      await navigator.clipboard.writeText(deviceCode.code)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2500)
+    } catch (err) {
+      console.error('Не удалось скопировать текст: ', err)
+    }
+  }
+
   return (
-    <CustomModal isOpen={deviceCode !== null} onClose={() => setDeviceCode(null)} size="medium" title="Вход в аккаунт">
+    <CustomModal isOpen={deviceCode !== null} onClose={() => setDeviceCode(null)} size="medium" title="Login to your account">
       <div className="flex flex-col items-center gap-3 text-center">
         <p className="text-sm text-gray-400">
-          Введите этот код по ссылке ниже или отсканируйте QR-код
+          Enter this code at the link below or scan the QR code.
         </p>
 
         {qrDataUrl && (
@@ -48,13 +59,29 @@ export default function DeviceCodeModal() {
           </div>
         )}
 
-        <div className="text-2xl font-bold tracking-widest text-white bg-white/5 px-4 py-2 rounded-lg">
-          {deviceCode?.code}
+        <div className="flex items-center gap-2 mt-2">
+          <div className="text-2xl font-bold tracking-widest text-white bg-white/5 px-4 py-2 rounded-lg">
+            {deviceCode?.code}
+          </div>
+          
+          <button
+            onClick={handleCopy}
+            className="flex items-center justify-center p-[14px] rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors h-full"
+            title="Copy code"
+            aria-label="Copy code"
+          >
+            <MorphIcon
+              icon={isCopied ? Check : Clipboard}
+              size={20}
+              spring="snappy"
+              strokeWidth={2.5}
+            />
+          </button>
         </div>
 
         <button
           onClick={handleOpenLink}
-          className="text-sm text-blue-400 hover:text-blue-300 underline cursor-pointer"
+          className="text-sm text-blue-400 hover:text-blue-300 underline cursor-pointer mt-2"
         >
           {deviceCode?.url}
         </button>

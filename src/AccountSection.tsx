@@ -132,6 +132,14 @@ export default function AccountSection() {
     }
   }
 
+  const handleLogout = async () => {
+    setAccount(null)
+    
+    if (window.auth.logout) {
+      await window.auth.logout()
+    }
+  }
+
   const handleSkinChanged = () => {
     if (!account?.uuid) return
     // Принудительно сбрасываем кэш, добавляя параметр времени к URL.
@@ -149,12 +157,13 @@ export default function AccountSection() {
 
   return (
     <div className="relative h-full w-[20%] rounded-xl overflow-hidden shadow-2xl shadow-black/40 flex flex-col gap-5 bg-transparent">
-      <div className="flex flex-row justify-around w-full gap-2 shrink-0 relative z-10">
+      <div className="flex flex-row justify-around w-full gap-2 shrink-0 relative z-20"> {/* z-20 чтобы меню было поверх 3D вьюера */}
         <AccountTile
-          username={isLoading ? 'Загрузка...' : account?.username ?? 'Войдите в свой аккаунт'}
+          username={isLoading ? 'Загрузка...' : account?.username ?? 'Sing in to your account'}
           isLoggedIn={!!account}
           skinUrl={account?.skinUrl ?? GUEST_SKIN}
           onClick={handleLogin}
+          onLogout={handleLogout}
           isLoading={isLoading}
         />
       </div>
