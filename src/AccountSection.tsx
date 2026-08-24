@@ -156,8 +156,8 @@ export default function AccountSection() {
   }
 
   return (
-    <div className="relative h-full w-[20%] rounded-xl overflow-hidden shadow-2xl shadow-black/40 flex flex-col gap-5 bg-transparent">
-      <div className="flex flex-row justify-around w-full gap-2 shrink-0 relative z-20"> {/* z-20 чтобы меню было поверх 3D вьюера */}
+    <div className="relative h-full w-[20%] rounded-xl overflow-hidden flex flex-col gap-5 ">
+      <div className="flex flex-row justify-around w-full gap-2 shrink-0 relative z-20">
         <AccountTile
           username={isLoading ? 'Загрузка...' : account?.username ?? 'Sing in to your account'}
           isLoggedIn={!!account}

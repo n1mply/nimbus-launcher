@@ -19,3 +19,11 @@ export type Cape = {
   url: string;
   isActive: boolean;
 }
+
+export type Instance = {
+  name: string;
+  modloader: 'vanilla' | 'fabric' | 'forge' | 'neoforge' | 'quilt';
+  minecraftVersion: string;
+  modloaderVersion?: string|null;
+  instanceIconPath?: string;
+}

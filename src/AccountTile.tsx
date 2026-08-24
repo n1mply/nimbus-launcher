@@ -6,7 +6,7 @@ type Props = {
   isLoggedIn: boolean
   skinUrl: string
   onClick: () => void
-  onLogout: () => void // Добавляем проп для логаута
+  onLogout: () => void
   isLoading?: boolean
 }
 
@@ -15,7 +15,6 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, on
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [isOpen, setIsOpen] = useState(false)
 
-  // Закрытие меню при клике вне его области
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -26,7 +25,6 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, on
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Отрисовка скина (без изменений)
   useEffect(() => {
     const canvas = avatarCanvasRef.current
     if (!canvas) return
@@ -62,7 +60,7 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, on
       <button
         onClick={handleTileClick}
         disabled={isLoading}
-        className={`flex items-center gap-3 w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 text-left transition-colors ${
+        className={`flex items-center gap-3 w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-3 text-left transition-colors ${
           isLoading ? 'cursor-default' : 'hover:bg-white/[0.06] cursor-pointer'
         }`}
       >
@@ -80,7 +78,7 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, on
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-white truncate">{username}</div>
           <div className="text-xs text-gray-500 truncate">
-            {isLoading ? 'Finding session...' : isLoggedIn ? 'Microsoft account' : 'Click to sign in'}
+            {isLoading ? 'Finding session...' : isLoggedIn ? 'Minecraft account' : 'Click to sign in'}
           </div>
         </div>
         
@@ -93,7 +91,7 @@ export default function AccountTile({ username, isLoggedIn, skinUrl, onClick, on
       </button>
 
       <div 
-        className={`absolute left-0 top-full mt-2 w-full rounded-xl border border-white/5 bg-[#151821] p-1.5 shadow-2xl transition-all duration-300 z-50 ${
+        className={`absolute left-0 top-full mt-2 w-full rounded-xl border border-white/5 bg-[#161821] p-1.5 shadow-2xl transition-all duration-300 z-50 ${
           isOpen ? 'opacity-100 translate-y-0 visible' : 'opacity-0 -translate-y-2 invisible'
         }`}
       >
