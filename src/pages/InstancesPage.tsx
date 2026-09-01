@@ -4,6 +4,7 @@ import InstanceTile from "../InstanceTile"
 import { Plus, Search, PackageOpen, SearchX } from "lucide-react"
 import { LayoutGrid, List } from "lucide"
 import { MorphIcon } from "morphicons/react"
+import AddInstanceModal from "../AddInstanceModal"
 
 // Моковые данные — только для демонстрации верстки, убрать после подключения реальных сборок
 const MOCK_INSTANCES: Instance[] = [
@@ -15,7 +16,8 @@ const MOCK_INSTANCES: Instance[] = [
 ]
 
 export default function InstancesPage() {
-    const [instances] = useState<Instance[]>(MOCK_INSTANCES)
+    const [instances, setInstances] = useState<Instance[]>(MOCK_INSTANCES)
+    const [isOpen, setIsOpen] = useState(false) 
     const [isLoading, setIsLoading] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -45,7 +47,7 @@ export default function InstancesPage() {
                         {instances.length === 0 ? "You haven't installed any instances yet." : `${instances.length} instances`}
                     </p>
                 </div>
-                <button className="flex gap-1 items-center rounded-xl border border-blue-400/20 bg-blue-500/10 py-3 px-6 text-blue-300 hover:bg-blue-500/15 hover:border-blue-400/30 cursor-pointer transition-colors active:scale-[0.99] transition-transform duration-150 backface-visibility-hidden will-change-transform">
+                <button onClick={()=>setIsOpen(true)} className="flex gap-1 items-center rounded-xl border border-blue-400/20 bg-blue-500/10 py-3 px-6 text-blue-300 hover:bg-blue-500/15 hover:border-blue-400/30 cursor-pointer transition-colors active:scale-[0.99] transition-transform duration-150 backface-visibility-hidden will-change-transform">
                     <Plus size={20} strokeWidth={2.5}/>
                     <p className="text-[14px] font-medium">Add instance</p>
                 </button>
@@ -100,6 +102,7 @@ export default function InstancesPage() {
                     </div>
                 )}
             </div>
+            <AddInstanceModal isOpen={isOpen} onClose={()=>setIsOpen(false)}/>
         </div>
     )
 }

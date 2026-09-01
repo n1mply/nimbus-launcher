@@ -10,6 +10,7 @@ type Props = {
   children: ReactNode
   title?: string
   size?: ModalSize
+  isFlexible?: boolean
   closeOnOutsideClick?: boolean
   closeOnEsc?: boolean
 }
@@ -17,8 +18,16 @@ type Props = {
 const sizeClasses: Record<ModalSize, string> = {
   small: 'w-[420px] max-h-[260px]',
   medium: 'w-[480px] max-h-[640px]',
-  large: 'w-[680px] max-h-[800px]'
+  large: 'w-[680px] max-h-[800px]',
 }
+
+const flexibleSizeClasses: Record<ModalSize, string> = {
+  small: 'w-[420px] min-h-[260px] max-h-[90vh]',
+  medium: 'w-[480px] min-h-[640px] max-h-[90vh]',
+  large: 'w-[680px] min-h-[800px] max-h-[90vh]'
+}
+
+
 
 const ANIMATION_DURATION = 200 // мс, совпадает с длительностью transition в классах ниже
 
@@ -39,6 +48,7 @@ export default function CustomModal({
   title,
   size = 'small',
   closeOnOutsideClick = true,
+  isFlexible=false,
   closeOnEsc = true,
 }: Props) {
   const [portalRoot] = useState(getOrCreatePortalRoot)
@@ -93,7 +103,9 @@ export default function CustomModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`flex flex-col bg-gradient-to-b from-[#1E2029] to-[#14151C] rounded-xl border border-white/5 shadow-2xl shadow-black/40 transition-all duration-200 ${sizeClasses[size]} ${
+        className={`flex flex-col bg-gradient-to-b from-[#1E2029] to-[#14151C] rounded-xl border border-white/5 shadow-2xl shadow-black/40 transition-all duration-200 ${
+          isFlexible ? flexibleSizeClasses[size] : sizeClasses[size]
+        } ${
           isAnimatingIn ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
         }`}
       >
@@ -107,7 +119,7 @@ export default function CustomModal({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
           {children}
         </div>
       </div>

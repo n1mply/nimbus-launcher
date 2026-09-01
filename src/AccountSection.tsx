@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { SkinViewer, IdleAnimation } from 'skinview3d'
+import { SkinViewer } from 'skinview3d'
+import { SkinViewBlockbench } from 'skinview3d-blockbench'
 import { Box3, CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three'
 import SidebarItem from './SidebarItem'
 import AccountTile from './AccountTile'
@@ -10,7 +11,16 @@ import CapesModal from './CapesModal'
 import { Shirt, Scroll } from 'lucide-react'
 import { Account } from './types'
 
+import idleAnimation from './assets/animations/idle.animation.json'
+import armLookOutAnimation from './assets/animations/armLookOut.animation.json'
+import stretchAnimation from './assets/animations/stretch.animation.json'
+
 const GUEST_SKIN = '/user_skin.png'
+
+const EXTRA_ANIMATIONS = [
+  { json: armLookOutAnimation, duration: 4000 },
+  { json: stretchAnimation, duration: 4800 },
+]
 
 function createShadowTexture(): CanvasTexture {
   const size = 128
@@ -18,7 +28,15 @@ function createShadowTexture(): CanvasTexture {
   canvas.width = canvas.height = size
   const ctx = canvas.getContext('2d')!
 
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    0,
+    size / 2,
+    size / 2,
+    size / 2
+  )
+
   gradient.addColorStop(0, 'rgba(0,0,0,0.7)')
   gradient.addColorStop(0.6, 'rgba(0,0,0,0.35)')
   gradient.addColorStop(1, 'rgba(0,0,0,0)')
@@ -39,9 +57,11 @@ export default function AccountSection() {
   const [isOpenSkins, setOpenSkins] = useState(false)
   const [isOpenCapes, setOpenCapes] = useState(false)
 
-  // Инициализация 3D-вьюера — один раз при монтировании компонента
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return
+
+    let actionTimeout: NodeJS.Timeout | null = null
+    let resetTimeout: NodeJS.Timeout | null = null
 
     const viewer = new SkinViewer({
       canvas: canvasRef.current,
@@ -49,6 +69,7 @@ export default function AccountSection() {
       height: containerRef.current.clientHeight,
       pixelRatio: window.devicePixelRatio * 1.5,
     })
+
     viewerRef.current = viewer
 
     viewer.fov = 60
@@ -64,33 +85,74 @@ export default function AccountSection() {
       viewer.width = width
       viewer.height = height
     })
+
     resizeObserver.observe(containerRef.current)
 
     let shadowMesh: Mesh | null = null
 
+    const playIdle = () => {
+      viewer.animation = new SkinViewBlockbench({
+        animation: idleAnimation,
+        forceLoop: true,
+      })
+    }
+
+    const scheduleNextAction = () => {
+      const randomDelay = Math.floor(Math.random() * 5000) + 8000
+
+      actionTimeout = setTimeout(() => {
+        const targetAction = EXTRA_ANIMATIONS[Math.floor(Math.random() * EXTRA_ANIMATIONS.length)]
+
+        viewer.animation = new SkinViewBlockbench({
+          animation: targetAction.json,
+          forceLoop: false,
+        })
+
+        resetTimeout = setTimeout(() => {
+          playIdle()
+          scheduleNextAction()
+        }, targetAction.duration)
+      }, randomDelay)
+    }
+
     viewer.loadSkin(GUEST_SKIN).then(() => {
-      viewer.animation = new IdleAnimation()
+      playIdle()
+      scheduleNextAction()
+
       const box = new Box3().setFromObject(viewer.playerObject)
+
       shadowMesh = new Mesh(
         new PlaneGeometry(22, 22),
-        new MeshBasicMaterial({ map: createShadowTexture(), transparent: true, depthWrite: false })
+        new MeshBasicMaterial({
+          map: createShadowTexture(),
+          transparent: true,
+          depthWrite: false,
+        })
       )
+
       shadowMesh.rotation.x = -Math.PI / 2
       shadowMesh.position.y = box.min.y + 0.05
+
       viewer.scene.add(shadowMesh)
     })
 
     return () => {
+      if (actionTimeout) clearTimeout(actionTimeout)
+      if (resetTimeout) clearTimeout(resetTimeout)
+
       resizeObserver.disconnect()
+
       if (shadowMesh) {
         shadowMesh.geometry.dispose()
         ;(shadowMesh.material as MeshBasicMaterial).map?.dispose()
         ;(shadowMesh.material as MeshBasicMaterial).dispose()
       }
+
       viewer.dispose()
       viewerRef.current = null
     }
   }, [])
+
 
   // Восстановление сессии при старте лаунчера
   useEffect(() => {
@@ -197,11 +259,11 @@ export default function AccountSection() {
         </CustomModal>
       )}
 
-      {/* Интеграция плащей */}
       {account?.uuid ? (
         <CapesModal
           isOpen={isOpenCapes}
           onClose={() => setOpenCapes(false)}
+          uuid={account.uuid}
           onCapeChanged={handleCapeChanged}
         />
       ) : (

@@ -36,3 +36,7 @@ electron.contextBridge.exposeInMainWorld("capes", {
   getAll: (forceRefresh) => electron.ipcRenderer.invoke("capes:get-all", forceRefresh),
   apply: (capeId) => electron.ipcRenderer.invoke("capes:apply", capeId)
 });
+electron.contextBridge.exposeInMainWorld("versions", {
+  getGameVersions: () => electron.ipcRenderer.invoke("versions:getGameVersions"),
+  getLoaderVersions: (loader, mcVersion) => electron.ipcRenderer.invoke("versions:getLoaderVersions", loader, mcVersion)
+});

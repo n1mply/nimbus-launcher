@@ -41,3 +41,9 @@ contextBridge.exposeInMainWorld('capes', {
   getAll: (forceRefresh?: boolean) => ipcRenderer.invoke('capes:get-all', forceRefresh),
   apply: (capeId: string | null) => ipcRenderer.invoke('capes:apply', capeId),
 })
+
+contextBridge.exposeInMainWorld('versions', {
+  getGameVersions: () => ipcRenderer.invoke('versions:getGameVersions'),
+  getLoaderVersions: (loader: string, mcVersion: string) =>
+    ipcRenderer.invoke('versions:getLoaderVersions', loader, mcVersion),
+})
