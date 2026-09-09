@@ -27,3 +27,11 @@ export type Instance = {
   modloaderVersion?: string|null;
   instanceIconPath?: string;
 }
+
+export type VersionType = 'release' | 'snapshot'
+
+export type Version = {
+  id: string;
+  versionType: VersionType;
+  url: string;
+}

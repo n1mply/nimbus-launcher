@@ -40,3 +40,7 @@ electron.contextBridge.exposeInMainWorld("versions", {
   getGameVersions: () => electron.ipcRenderer.invoke("versions:getGameVersions"),
   getLoaderVersions: (loader, mcVersion) => electron.ipcRenderer.invoke("versions:getLoaderVersions", loader, mcVersion)
 });
+electron.contextBridge.exposeInMainWorld("instancesAPI", {
+  create: (payload) => electron.ipcRenderer.invoke("instances:create", payload),
+  getAll: () => electron.ipcRenderer.invoke("instances:getAll")
+});

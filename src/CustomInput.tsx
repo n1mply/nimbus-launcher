@@ -14,9 +14,18 @@ type Props = {
     placeholder?: string
     showStableToggle?: boolean // показывать переключатель "Show all versions" внизу списка
     isListGoingUp?: boolean // открывать выпадающий список вверх
+    isClearableOnClick?: boolean // очищать инпут при получении фокуса (клике)
 }
 
-export default function CustomInput({ value, onChange, options, placeholder, showStableToggle = false, isListGoingUp = false }: Props) {
+export default function CustomInput({ 
+    value, 
+    onChange, 
+    options, 
+    placeholder, 
+    showStableToggle = false, 
+    isListGoingUp = false,
+    isClearableOnClick = false // По умолчанию false, чтобы не ломать старое поведение
+}: Props) {
     const [isOpen, setIsOpen] = useState(false)
     const [showAll, setShowAll] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
@@ -53,7 +62,13 @@ export default function CustomInput({ value, onChange, options, placeholder, sho
                         onChange(e.target.value)
                         setIsOpen(true)
                     }}
-                    onFocus={() => setIsOpen(true)}
+                    onFocus={() => {
+                        setIsOpen(true)
+                        // Если проп передан и поле не пустое — очищаем его при фокусе
+                        if (isClearableOnClick && value !== "") {
+                            onChange("")
+                        }
+                    }}
                     placeholder={placeholder}
                     className="w-full rounded-xl border border-white/5 bg-white/[0.03] py-2.5 pl-3 pr-9 text-[14px] text-white placeholder:text-gray-500 outline-none transition-colors focus:border-white/10 focus:bg-white/[0.05]"
                 />

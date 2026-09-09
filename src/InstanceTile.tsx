@@ -12,7 +12,7 @@ export default function InstanceTile({ name, modloader, minecraftVersion, instan
             <button className="group flex w-full min-w-0 items-center gap-4 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3 text-left transition-all duration-200 hover:bg-white/[0.06] hover:border-white/10 cursor-pointer">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/5 transition-colors group-hover:bg-white/[0.08]">
                     {instanceIconPath ? (
-                        <img src={instanceIconPath} alt={name} className="h-7 w-7 object-contain rounded" />
+                        <img src={instanceIconPath} alt={name} className="h-full w-full object-contain rounded" />
                     ) : (
                         <Box size={20} strokeWidth={1.5} className="text-gray-400" />
                     )}
@@ -29,7 +29,7 @@ export default function InstanceTile({ name, modloader, minecraftVersion, instan
         <button className="group flex w-full min-w-0 flex-col items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] p-5 text-center transition-all duration-200 hover:bg-white/[0.06] hover:border-white/10 hover:-translate-y-0.5 cursor-pointer">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-white/5 transition-colors group-hover:bg-white/[0.08]">
                 {instanceIconPath ? (
-                    <img src={instanceIconPath} alt={name} className="h-10 w-10 object-contain rounded-md" />
+                    <img src={instanceIconPath} alt={name} className="h-full w-full object-contain rounded-md" />
                 ) : (
                     <Box size={32} strokeWidth={1.5} className="text-gray-400" />
                 )}
