@@ -52,4 +52,5 @@ contextBridge.exposeInMainWorld('versions', {
 contextBridge.exposeInMainWorld('instancesAPI', {
   create: (payload: any) => ipcRenderer.invoke('instances:create', payload),
   getAll: () => ipcRenderer.invoke('instances:getAll'),
+  checkInstalled: (instanceId: string) => ipcRenderer.invoke('instances:checkInstalled', instanceId),
 });

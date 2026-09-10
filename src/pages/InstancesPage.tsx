@@ -5,6 +5,7 @@ import { Plus, Search, PackageOpen, SearchX, Loader2 } from "lucide-react";
 import { LayoutGrid, List } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import AddInstanceModal from "../AddInstanceModal";
+import AbsoluteGameBar from "../AbsoluteGameBar";
 
 export default function InstancesPage() {
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -12,6 +13,10 @@ export default function InstancesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  const [selectedInstance, setSelectedInstance] = useState<Instance | null>(
+    null,
+  );
 
   const loadInstances = useCallback(async () => {
     try {
@@ -136,7 +141,8 @@ export default function InstancesPage() {
             {filteredInstances.map((instance, index) => (
               <div
                 key={`${instance.id || instance.name}-${viewMode}`}
-                className="min-w-0 active:scale-[0.99] transition-transform duration-150 will-change-transform"
+                onClick={() => setSelectedInstance(instance)}
+                className="min-w-0 cursor-pointer active:scale-[0.99] transition-transform duration-150 will-change-transform"
                 style={{
                   animation: "fadeInUp 0.2s ease-out both",
                   animationDelay: `${index * 25}ms`,
@@ -153,6 +159,10 @@ export default function InstancesPage() {
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         onSuccess={loadInstances}
+      />
+      <AbsoluteGameBar
+        instance={selectedInstance}
+        onClose={() => setSelectedInstance(null)}
       />
     </div>
   );

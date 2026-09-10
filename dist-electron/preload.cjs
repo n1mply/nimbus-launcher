@@ -42,5 +42,6 @@ electron.contextBridge.exposeInMainWorld("versions", {
 });
 electron.contextBridge.exposeInMainWorld("instancesAPI", {
   create: (payload) => electron.ipcRenderer.invoke("instances:create", payload),
-  getAll: () => electron.ipcRenderer.invoke("instances:getAll")
+  getAll: () => electron.ipcRenderer.invoke("instances:getAll"),
+  checkInstalled: (instanceId) => electron.ipcRenderer.invoke("instances:checkInstalled", instanceId)
 });

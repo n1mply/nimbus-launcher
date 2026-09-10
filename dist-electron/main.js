@@ -22990,6 +22990,15 @@ async function getInstances() {
   }
   return instances.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
+async function isInstanceInstalled(instanceId) {
+  const minecraftPath = path$1.join(getInstancesPath(), instanceId, "minecraft");
+  try {
+    const files = await fs$2.readdir(minecraftPath);
+    return files.length > 0;
+  } catch {
+    return false;
+  }
+}
 process.env.DEBUG = "prismarine-auth";
 createRequire(import.meta.url);
 const __dirname$1 = path$2.dirname(fileURLToPath(import.meta.url));
@@ -23083,6 +23092,9 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("instances:getAll", async () => {
     return await getInstances();
+  });
+  ipcMain.handle("instances:checkInstalled", async (_, instanceId) => {
+    return await isInstanceInstalled(instanceId);
   });
   createWindow();
 });

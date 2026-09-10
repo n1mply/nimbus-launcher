@@ -11,7 +11,7 @@ import { registerSkinsHandlers } from "./skins";
 import { registerCapesHandlers } from "./capes";
 import path from "node:path";
 import { registerVersionsHandlers } from "./versions";
-import { createInstance, getInstances } from "./instances";
+import { createInstance, getInstances, isInstanceInstalled } from "./instances";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const require = createRequire(import.meta.url);
@@ -124,5 +124,8 @@ app.whenReady().then(() => {
   ipcMain.handle("instances:getAll", async () => {
     return await getInstances();
   });
+  ipcMain.handle('instances:checkInstalled', async (_, instanceId: string) => {
+  return await isInstanceInstalled(instanceId);
+});
   createWindow();
 });

@@ -138,3 +138,13 @@ export async function getInstances() {
 
   return instances.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
+
+export async function isInstanceInstalled(instanceId: string): Promise<boolean> {
+  const minecraftPath = path.join(getInstancesPath(), instanceId, 'minecraft');
+  try {
+    const files = await fs.readdir(minecraftPath);
+    return files.length > 0;
+  } catch {
+    return false;
+  }
+}
