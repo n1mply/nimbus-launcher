@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { Instance } from "./types";
-import {
-  Play,
-  Download,
-  SlidersHorizontal,
-  Folder,
-  ChevronDown,
-  Loader2,
-} from "lucide-react";
+import { Play, Download, Loader2 } from "lucide-react";
 import GameBarMarquee from "./GameBarMarquee";
+import { MorphIcon } from "morphicons/react";
+
+import {
+  Folder,
+  FolderOpen,
+  X,
+  ChevronDown,
+  SlidersHorizontal,
+  Settings,
+} from "lucide";
 
 type AbsoluteGameBarProps = {
   instance: Instance | null;
@@ -35,7 +38,6 @@ export default function AbsoluteGameBar({
   onOpenFolder,
   onOpenSettings,
 }: AbsoluteGameBarProps) {
-
   const [displayedInstance, setDisplayedInstance] = useState<Instance | null>(
     instance,
   );
@@ -46,6 +48,22 @@ export default function AbsoluteGameBar({
   const requestIdRef = useRef(0);
   const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitHandledRef = useRef(false);
+  const [isHoveredFolder, setIsHoveredFolder] = useState(false);
+  const [isHoveredSettings, setIsHoveredSettings] = useState(false);
+  const [isHoveredClose, setIsHoveredClose] = useState(false);
+
+  const handleOpenFolder = async () => {
+    try {
+      const res = await window.folderAPI.openInstanceFolder(
+        displayedInstance?.name,
+      );
+      if (res && !res.success) {
+        alert(`Ошибка при открытии папки: ${res.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const runInstalledCheck = (target: Instance) => {
     setStatus("loading");
@@ -161,9 +179,15 @@ export default function AbsoluteGameBar({
           <button
             type="button"
             onClick={() => onOpenSettings?.(displayedInstance)}
+            onMouseEnter={() => setIsHoveredSettings(true)}
+            onMouseLeave={() => setIsHoveredSettings(false)}
             className="backface-visibility-hidden will-change-transform flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white cursor-pointer active:scale-95"
           >
-            <SlidersHorizontal size={16} />
+            <MorphIcon
+              icon={isHoveredSettings ? Settings : SlidersHorizontal}
+              size={16}
+              spring="snappy"
+            />
             <span>Settings</span>
           </button>
 
@@ -199,22 +223,34 @@ export default function AbsoluteGameBar({
 
           <button
             type="button"
-            onClick={() => onOpenFolder?.(displayedInstance)}
+            onClick={handleOpenFolder}
+            onMouseEnter={() => setIsHoveredFolder(true)}
+            onMouseLeave={() => setIsHoveredFolder(false)}
             className="backface-visibility-hidden will-change-transform flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white cursor-pointer active:scale-95"
           >
-            <Folder size={16} />
+            <MorphIcon
+              icon={isHoveredFolder ? FolderOpen : Folder}
+              size={16}
+              spring="snappy"
+            />
             <span>Folder</span>
           </button>
 
-          <div className="h-4 w-[1px] bg-white/10 mx-1" />
+          <div className="h-4 w-px bg-white/10 mx-1" />
 
           <button
             type="button"
             onClick={onClose}
+            onMouseEnter={() => setIsHoveredClose(true)}
+            onMouseLeave={() => setIsHoveredClose(false)}
             aria-label="Hide panel"
             className="backface-visibility-hidden will-change-transform flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white/10 hover:text-white cursor-pointer active:scale-95"
           >
-            <ChevronDown size={18} />
+            <MorphIcon
+              icon={isHoveredClose ? X : ChevronDown}
+              size={18}
+              spring="snappy"
+            />
           </button>
         </div>
       </div>

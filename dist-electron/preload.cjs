@@ -4,7 +4,10 @@ console.log(">>> PRELOAD STARTED");
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {
     const [channel, listener] = args;
-    return electron.ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
+    return electron.ipcRenderer.on(
+      channel,
+      (event, ...args2) => listener(event, ...args2)
+    );
   },
   off(...args) {
     const [channel, ...omit] = args;
@@ -44,4 +47,7 @@ electron.contextBridge.exposeInMainWorld("instancesAPI", {
   create: (payload) => electron.ipcRenderer.invoke("instances:create", payload),
   getAll: () => electron.ipcRenderer.invoke("instances:getAll"),
   checkInstalled: (instanceId) => electron.ipcRenderer.invoke("instances:checkInstalled", instanceId)
+});
+electron.contextBridge.exposeInMainWorld("folderAPI", {
+  openInstanceFolder: (folderName) => electron.ipcRenderer.invoke("folder:openInstanceFolder", folderName)
 });

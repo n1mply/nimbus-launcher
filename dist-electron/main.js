@@ -1,7 +1,7 @@
 import { protocol, ipcMain, shell, app, BrowserWindow } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import require$$0$1 from "fs";
+import require$$0$1, { existsSync } from "fs";
 import path$1 from "path";
 import crypto$6 from "crypto";
 import require$$1 from "tty";
@@ -22981,7 +22981,6 @@ async function getInstances() {
         instances.push({
           ...instanceData,
           instanceIconPath
-          // <-- Теперь здесь лежит готовый base64 Data URL
         });
       } catch (e) {
         console.warn(`Skipped ${dirent.name}: data.json is missing or invalid`);
@@ -22998,6 +22997,41 @@ async function isInstanceInstalled(instanceId) {
   } catch {
     return false;
   }
+}
+function registerInstanceHandlers() {
+  ipcMain.handle("instances:create", async (_, payload) => {
+    return await createInstance(payload);
+  });
+  ipcMain.handle("instances:getAll", async () => {
+    return await getInstances();
+  });
+  ipcMain.handle("instances:checkInstalled", async (_, instanceId) => {
+    return await isInstanceInstalled(instanceId);
+  });
+}
+function registerFolderHandlers() {
+  ipcMain.handle("folder:openInstanceFolder", async (_, folderName) => {
+    try {
+      const targetPath = path$1.join(
+        app.getPath("userData"),
+        "instances",
+        folderName,
+        "minecraft"
+      );
+      if (!existsSync(targetPath)) {
+        await fs$2.mkdir(targetPath, { recursive: true });
+      }
+      const errorMessage = await shell.openPath(targetPath);
+      if (errorMessage) {
+        console.error("Ошибка shell.openPath:", errorMessage);
+        return { success: false, error: errorMessage };
+      }
+      return { success: true };
+    } catch (error2) {
+      console.error("Ошибка при работе с ФС:", error2);
+      return { success: false, error: error2.message };
+    }
+  });
 }
 process.env.DEBUG = "prismarine-auth";
 createRequire(import.meta.url);
@@ -23087,15 +23121,8 @@ app.whenReady().then(() => {
   registerSkinsHandlers();
   registerCapesHandlers();
   registerVersionsHandlers();
-  ipcMain.handle("instances:create", async (_, payload) => {
-    return await createInstance(payload);
-  });
-  ipcMain.handle("instances:getAll", async () => {
-    return await getInstances();
-  });
-  ipcMain.handle("instances:checkInstalled", async (_, instanceId) => {
-    return await isInstanceInstalled(instanceId);
-  });
+  registerInstanceHandlers();
+  registerFolderHandlers();
   createWindow();
 });
 export {

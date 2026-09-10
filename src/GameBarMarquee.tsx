@@ -36,18 +36,12 @@ export default function GameBarMarquee({
         <span className="shrink-0 px-4">
           {text}
         </span>
-
-        {/* Вторая копия */}
         <span className="shrink-0 px-4">
           {text}
         </span>
-
-        {/* Третья копия для надёжного заполнения */}
         <span className="shrink-0 px-4">
           {text}
         </span>
-
-        {/* Четвёртая копия */}
         <span className="shrink-0 px-4">
           {text}
         </span>

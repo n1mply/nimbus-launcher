@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, ipcMain } from 'electron'; // Добавили ipcMain
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -35,8 +35,7 @@ const sanitizeFolderName = (name: string) => name.replace(/[<>:"/\\|?*\x00-\x1F]
 
 export async function createInstance(payload: CreateInstancePayload) {
   const instancesDir = getInstancesPath();
-  
-  // Если имя пустое (например, юзер не ввел), генерируем его из версии игры
+
   const rawName = payload.name || `${payload.modloader}-${payload.minecraftVersion}`;
   const folderName = sanitizeFolderName(rawName);
   
@@ -47,21 +46,18 @@ export async function createInstance(payload: CreateInstancePayload) {
   const instancePath = path.join(instancesDir, folderName);
 
   try {
-    // Проверяем, нет ли уже такой сборки
     await fs.access(instancePath);
     return { success: false, error: 'Instance with this name already exists' };
   } catch {
-    // Ошибки нет, значит папка свободна, идем дальше
+    
   }
 
   try {
-    // Создаем структуру папок
     await fs.mkdir(instancePath, { recursive: true });
     await fs.mkdir(path.join(instancePath, 'minecraft'), { recursive: true });
 
     let iconFileName = null;
 
-    // Если пользователь загрузил картинку, копируем её в папку сборки
     if (payload.instanceIconPath) {
       const ext = path.extname(payload.instanceIconPath) || '.png';
       iconFileName = `icon${ext}`;
@@ -114,7 +110,6 @@ export async function getInstances() {
 
         let instanceIconPath: string | null = null;
 
-        // Если файл иконки указан — читаем его и переводим в Base64
         if (instanceData.iconFileName) {
           const fullIconPath = path.join(instanceFolderPath, instanceData.iconFileName);
           try {
@@ -128,7 +123,7 @@ export async function getInstances() {
 
         instances.push({
           ...instanceData,
-          instanceIconPath, // <-- Теперь здесь лежит готовый base64 Data URL
+          instanceIconPath,
         });
       } catch (e) {
         console.warn(`Skipped ${dirent.name}: data.json is missing or invalid`);
@@ -147,4 +142,19 @@ export async function isInstanceInstalled(instanceId: string): Promise<boolean> 
   } catch {
     return false;
   }
+}
+
+// === НОВАЯ ФУНКЦИЯ ДЛЯ РЕГИСТРАЦИИ IPC ===
+export function registerInstanceHandlers() {
+  ipcMain.handle("instances:create", async (_, payload: CreateInstancePayload) => {
+    return await createInstance(payload);
+  });
+
+  ipcMain.handle("instances:getAll", async () => {
+    return await getInstances();
+  });
+
+  ipcMain.handle('instances:checkInstalled', async (_, instanceId: string) => {
+    return await isInstanceInstalled(instanceId);
+  });
 }
