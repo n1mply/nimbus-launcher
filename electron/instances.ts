@@ -73,9 +73,9 @@ export async function createInstance(payload: CreateInstancePayload) {
       iconFileName,
     };
 
-    // Сохраняем data.json
+    // Сохраняем instance.json
     await fs.writeFile(
-      path.join(instancePath, 'data.json'),
+      path.join(instancePath, 'in.json'),
       JSON.stringify(instanceData, null, 2),
       'utf-8'
     );
@@ -102,7 +102,7 @@ export async function getInstances() {
   for (const dirent of folders) {
     if (dirent.isDirectory()) {
       const instanceFolderPath = path.join(instancesDir, dirent.name);
-      const dataPath = path.join(instanceFolderPath, 'data.json');
+      const dataPath = path.join(instanceFolderPath, 'instance.json');
       
       try {
         const fileContent = await fs.readFile(dataPath, 'utf-8');

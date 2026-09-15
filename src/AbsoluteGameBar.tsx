@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useAlert } from './contexts/alertContext'
+import { useAlert } from "./contexts/alertContext";
 import { Instance } from "./types";
 import { Play, Download, Loader2 } from "lucide-react";
 import GameBarMarquee from "./GameBarMarquee";
@@ -13,6 +13,8 @@ import {
   SlidersHorizontal,
   Settings,
 } from "lucide";
+
+import InstallationModal from "./InstallationModal";
 
 type AbsoluteGameBarProps = {
   instance: Instance | null;
@@ -42,9 +44,11 @@ export default function AbsoluteGameBar({
   const [displayedInstance, setDisplayedInstance] = useState<Instance | null>(
     instance,
   );
-  const {showAlert} = useAlert()
+  const { showAlert } = useAlert();
   const [phase, setPhase] = useState<Phase>(instance ? "visible" : "hidden");
   const [status, setStatus] = useState<Status>("loading");
+
+  const [showModal, setShowModal] = useState(false);
 
   const pendingInstanceRef = useRef<Instance | null>(null);
   const requestIdRef = useRef(0);
@@ -155,10 +159,9 @@ export default function AbsoluteGameBar({
   const isVisible = phase === "visible";
 
   const handlePrimaryAction = () => {
-    // if (status === "installed" && onPlay) onPlay(displayedInstance);
-    // if (status === "not_installed" && onInstall) onInstall(displayedInstance);
-  
-  showAlert('Install was started!', 'error')
+    if (status === "not_installed") {
+      setShowModal(true);
+    }
   };
 
   return (
@@ -182,7 +185,7 @@ export default function AbsoluteGameBar({
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1A1C23]/90 px-3 py-2 shadow-2xl backdrop-blur-md">
           <button
             type="button"
-            onClick={() => showAlert('Install was started!', 'default')}
+            onClick={() => showAlert("Install was started!", "default")}
             onMouseEnter={() => setIsHoveredSettings(true)}
             onMouseLeave={() => setIsHoveredSettings(false)}
             className="backface-visibility-hidden will-change-transform flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white cursor-pointer active:scale-95"
@@ -258,6 +261,7 @@ export default function AbsoluteGameBar({
           </button>
         </div>
       </div>
+      <InstallationModal isOpen={showModal} instance={instance} onClose={() => setShowModal(false)} />
     </div>
   );
 }
