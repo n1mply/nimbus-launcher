@@ -4,6 +4,8 @@ import { Instance } from "./types";
 import { Play, Download, Loader2 } from "lucide-react";
 import GameBarMarquee from "./GameBarMarquee";
 import { MorphIcon } from "morphicons/react";
+import type { Status } from "./types";
+
 
 import {
   Folder,
@@ -18,6 +20,8 @@ import InstallationModal from "./InstallationModal";
 
 type AbsoluteGameBarProps = {
   instance: Instance | null;
+  status: Status;
+  setStatus: () => void;
   onClose: () => void;
   onPlay?: (instance: Instance) => void;
   onInstall?: (instance: Instance) => void;
@@ -25,19 +29,17 @@ type AbsoluteGameBarProps = {
   onOpenSettings?: (instance: Instance) => void;
 };
 
-type Status = "loading" | "installed" | "not_installed" | "error";
+// Добавлено состояние "launching" для индикации запуска процесса
 type Phase = "hidden" | "entering" | "visible" | "exiting";
 
-// Должно совпадать с duration-300 в className ниже — используется только
-// как фолбэк-таймер, если по какой-то причине не сработает onTransitionEnd
-// (например, элемент был вырезан из layout в момент события).
 const ANIMATION_DURATION = 300;
 
 export default function AbsoluteGameBar({
   instance,
+  status,
+  setStatus,
   onClose,
   onPlay,
-  onInstall,
   onOpenFolder,
   onOpenSettings,
 }: AbsoluteGameBarProps) {
@@ -46,7 +48,6 @@ export default function AbsoluteGameBar({
   );
   const { showAlert } = useAlert();
   const [phase, setPhase] = useState<Phase>(instance ? "visible" : "hidden");
-  const [status, setStatus] = useState<Status>("loading");
 
   const [showModal, setShowModal] = useState(false);
 
@@ -54,23 +55,27 @@ export default function AbsoluteGameBar({
   const requestIdRef = useRef(0);
   const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitHandledRef = useRef(false);
+
   const [isHoveredFolder, setIsHoveredFolder] = useState(false);
   const [isHoveredSettings, setIsHoveredSettings] = useState(false);
   const [isHoveredClose, setIsHoveredClose] = useState(false);
 
+  // Открытие папки игры
   const handleOpenFolder = async () => {
+    if (!displayedInstance) return;
+    const folderName = (displayedInstance as any).id || displayedInstance.name;
     try {
-      const res = await window.folderAPI.openInstanceFolder(
-        displayedInstance?.name,
-      );
+      const res = await window.folderAPI.openInstanceFolder(folderName);
       if (res && !res.success) {
-        alert(`Ошибка при открытии папки: ${res.error}`);
+        showAlert(`Error openeing folder: ${res.error}`, "error");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showAlert(`Can not open the instance folder: ${err.message}`, "error");
     }
   };
 
+  // Проверка, установлена ли сборка на диске
   const runInstalledCheck = (target: Instance) => {
     setStatus("loading");
     const instanceId = (target as any).id || target.name;
@@ -148,6 +153,35 @@ export default function AbsoluteGameBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instance]);
 
+  // Слушатели событий завершения/краша игры
+  useEffect(() => {
+    const unsubClosed = window.instancesAPI.onGameClosed?.((data: any) => {
+      const currentId =
+        (displayedInstance as any)?.id || displayedInstance?.name;
+      if (data.instanceId === currentId) {
+        setStatus("installed");
+        showAlert("Game was closed", "default");
+      }
+    });
+
+    const unsubCrashed = window.instancesAPI.onGameCrashed?.((data: any) => {
+      const currentId =
+        (displayedInstance as any)?.id || displayedInstance?.name;
+      if (data.instanceId === currentId) {
+        setStatus("installed");
+        showAlert(
+          `Game was crushed with error (code ${data.exitCode})`,
+          "error",
+        );
+      }
+    });
+
+    return () => {
+      unsubClosed?.();
+      unsubCrashed?.();
+    };
+  }, [displayedInstance]);
+
   useEffect(() => {
     return () => {
       if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
@@ -158,17 +192,40 @@ export default function AbsoluteGameBar({
 
   const isVisible = phase === "visible";
 
-  const handlePrimaryAction = () => {
+  // Обработчик кнопки Play / Install
+  async function handlePrimaryAction() {
     if (status === "not_installed") {
       setShowModal(true);
+      return;
     }
+
+    if (status === "installed") {
+      const instanceId =
+        (displayedInstance as any).id || displayedInstance.name;
+      setStatus("launching");
+
+      try {
+        onPlay?.(displayedInstance);
+        await window.instancesAPI.launch(instanceId);
+        // Не возвращаем статус назад сразу — игра запускается
+      } catch (err: any) {
+        console.error("Ошибка запуска:", err);
+        showAlert(`Launching error: ${err.message}`, "error");
+        setStatus("installed");
+      }
+    }
+  }
+
+  // Вызывается при успешном завершении установки в модалке
+  const handleInstallationSuccess = () => {
+    setStatus("installed");
+    setShowModal(false);
   };
 
   return (
     <div
       onTransitionEnd={(e) => {
         if (e.target !== e.currentTarget) return;
-
         if (phase === "exiting") {
           finishExit();
         }
@@ -183,9 +240,10 @@ export default function AbsoluteGameBar({
         <GameBarMarquee instance={displayedInstance} />
 
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1A1C23]/90 px-3 py-2 shadow-2xl backdrop-blur-md">
+          {/* Кнопка Settings */}
           <button
             type="button"
-            onClick={() => showAlert("Install was started!", "default")}
+            onClick={() => onOpenSettings?.(displayedInstance)}
             onMouseEnter={() => setIsHoveredSettings(true)}
             onMouseLeave={() => setIsHoveredSettings(false)}
             className="backface-visibility-hidden will-change-transform flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white cursor-pointer active:scale-95"
@@ -198,20 +256,27 @@ export default function AbsoluteGameBar({
             <span>Settings</span>
           </button>
 
+          {/* Главная кнопка: Play / Install / Launching */}
           <button
             type="button"
-            disabled={status === "loading" || status === "error"}
+            disabled={
+              status === "loading" ||
+              status === "launching" ||
+              status === "error"
+            }
             onClick={handlePrimaryAction}
             className={`backface-visibility-hidden will-change-transform flex w-36 items-center justify-center gap-2 rounded-full py-2.5 text-[14px] font-semibold transition-colors duration-150 cursor-pointer active:scale-95 ${
               status === "installed"
                 ? "border border-blue-400/30 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/10"
                 : status === "not_installed"
                   ? "border border-blue-400/30 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400/50"
-                  : "border border-white/5 bg-white/5 text-gray-500 cursor-not-allowed opacity-60"
+                  : status === "launching"
+                    ? "border border-amber-400/30 bg-amber-500/20 text-amber-300 cursor-wait"
+                    : "border border-white/5 bg-white/5 text-gray-500 cursor-not-allowed opacity-60"
             }`}
           >
-            {status === "loading" && (
-              <Loader2 size={18} className="animate-spin text-blue-400" />
+            {(status === "loading" || status === "launching") && (
+              <Loader2 size={18} className="animate-spin text-current" />
             )}
 
             {status === "installed" && (
@@ -223,11 +288,13 @@ export default function AbsoluteGameBar({
             <span>
               {status === "loading" && "Checking..."}
               {status === "installed" && "Play"}
+              {status === "launching" && "Launching..."}
               {status === "not_installed" && "Install"}
               {status === "error" && "Unavailable"}
             </span>
           </button>
 
+          {/* Кнопка Folder */}
           <button
             type="button"
             onClick={handleOpenFolder}
@@ -245,6 +312,7 @@ export default function AbsoluteGameBar({
 
           <div className="h-4 w-px bg-white/10 mx-1" />
 
+          {/* Кнопка Закрыть панель */}
           <button
             type="button"
             onClick={onClose}
@@ -261,7 +329,12 @@ export default function AbsoluteGameBar({
           </button>
         </div>
       </div>
-      <InstallationModal isOpen={showModal} instance={instance} onClose={() => setShowModal(false)} />
+      <InstallationModal
+        isOpen={showModal}
+        instance={displayedInstance}
+        onClose={() => setShowModal(false)}
+        onSuccess={handleInstallationSuccess}
+      />
     </div>
   );
 }

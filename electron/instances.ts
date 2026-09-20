@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'; // Добавили ipcMain
+import { app, ipcMain } from 'electron';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -75,7 +75,7 @@ export async function createInstance(payload: CreateInstancePayload) {
 
     // Сохраняем instance.json
     await fs.writeFile(
-      path.join(instancePath, 'in.json'),
+      path.join(instancePath, 'instance.json'),
       JSON.stringify(instanceData, null, 2),
       'utf-8'
     );
@@ -126,7 +126,7 @@ export async function getInstances() {
           instanceIconPath,
         });
       } catch (e) {
-        console.warn(`Skipped ${dirent.name}: data.json is missing or invalid`);
+        console.warn(`Skipped ${dirent.name}: instance.json is missing or invalid`);
       }
     }
   }
@@ -144,7 +144,6 @@ export async function isInstanceInstalled(instanceId: string): Promise<boolean> 
   }
 }
 
-// === НОВАЯ ФУНКЦИЯ ДЛЯ РЕГИСТРАЦИИ IPC ===
 export function registerInstanceHandlers() {
   ipcMain.handle("instances:create", async (_, payload: CreateInstancePayload) => {
     return await createInstance(payload);

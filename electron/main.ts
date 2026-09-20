@@ -2,17 +2,21 @@ process.env.DEBUG = "prismarine-auth";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
+
 import {
   registerAppFileProtocol,
   registerAuthHandlers,
+  registerAccountCredentialsHandler,
   setAuthMainWindow,
 } from "./auth";
 import { registerSkinsHandlers } from "./skins";
 import { registerCapesHandlers } from "./capes";
-import path from "node:path";
 import { registerVersionsHandlers } from "./versions";
 import { registerInstanceHandlers } from "./instances";
-import { registerFolderHandlers } from './folderActions';
+import { registerFolderHandlers } from "./folderActions";
+import { registerDownloadActions } from "./downloadActions";
+import { registerLaunchHandlers } from "./launchService";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const require = createRequire(import.meta.url);
@@ -45,8 +49,12 @@ function createWindow(): void {
       sandbox: false,
     },
   });
+
   setAuthMainWindow(win);
-  registerAuthHandlers();
+
+  // Регистрируем сервисы, требующие ссылку на окно для отправки IPC-событий в UI
+  registerDownloadActions(win);
+  registerLaunchHandlers(win);
 
   ipcMain.on(
     "window-control",
@@ -74,7 +82,7 @@ function createWindow(): void {
 
   win.once("ready-to-show", () => {
     win?.show();
-    // Консоль(закомитить, если консоль не нужна)
+    // Консоль (закомментировать в продакшене)
     win?.webContents.openDevTools();
   });
 
@@ -116,6 +124,8 @@ protocol.registerSchemesAsPrivileged([
 
 app.whenReady().then(() => {
   registerAppFileProtocol();
+  registerAuthHandlers();
+  registerAccountCredentialsHandler();
   registerSkinsHandlers();
   registerCapesHandlers();
   registerVersionsHandlers();

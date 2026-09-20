@@ -19,5 +19,9 @@ interface Window {
       delete: (fileName: string) => Promise<boolean>
       apply: (uuid: string, fileName: string) => Promise<boolean>
   }
+  folderAPI: {
+      openInstanceFolder: (folderName: string) => Promise<{ success: boolean; error?: string }>;
+      deleteInstanceFolder: (folderName: string, mode: 'soft' | 'hard') => Promise<{ success: boolean; error?: string }>;
+    };
   }
 }

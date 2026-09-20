@@ -3,11 +3,13 @@ import QRCode from 'qrcode'
 import CustomModal from './CustomModal'
 import { MorphIcon } from 'morphicons/react' 
 import { Clipboard, Check } from 'lucide'
+import { useAlert } from './contexts/alertContext'
 
 export default function DeviceCodeModal() {
   const [deviceCode, setDeviceCode] = useState<{ code: string; url: string } | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
+  const {showAlert} = useAlert()
 
   useEffect(() => {
     const handler = (_event: unknown, data: { code: string; url: string }) => {
@@ -41,8 +43,10 @@ export default function DeviceCodeModal() {
       await navigator.clipboard.writeText(deviceCode.code)
       setIsCopied(true)
       setTimeout(() => setIsCopied(false), 2500)
+      showAlert("Text was copied!", 'success')
+
     } catch (err) {
-      console.error('Не удалось скопировать текст: ', err)
+      showAlert("Error copying the text", 'error')
     }
   }
 
@@ -55,7 +59,7 @@ export default function DeviceCodeModal() {
 
         {qrDataUrl && (
           <div className="bg-white p-3 rounded-lg">
-            <img src={qrDataUrl} alt="QR-код для входа" width={160} height={160} />
+            <img src={qrDataUrl} alt="QR-code for login" width={160} height={160} />
           </div>
         )}
 

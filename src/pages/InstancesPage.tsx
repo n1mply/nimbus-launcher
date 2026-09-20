@@ -6,6 +6,8 @@ import { LayoutGrid, List } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import AddInstanceModal from "../AddInstanceModal";
 import AbsoluteGameBar from "../AbsoluteGameBar";
+import { useAlert } from "../contexts/alertContext";
+import type { Status } from "../types";
 
 export default function InstancesPage() {
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -17,6 +19,9 @@ export default function InstancesPage() {
   const [selectedInstance, setSelectedInstance] = useState<Instance | null>(
     null,
   );
+
+  const { showAlert } = useAlert();
+  const [status, setStatus] = useState<Status>("loading");
 
   const loadInstances = useCallback(async () => {
     try {
@@ -45,6 +50,23 @@ export default function InstancesPage() {
   const hasNoInstancesAtAll = !isLoading && instances.length === 0;
   const hasNoSearchResults =
     !hasNoInstancesAtAll && !isLoading && filteredInstances.length === 0;
+
+  const handleLaunch = async () => {
+    console.log("D2");
+    if (status === "installed") {
+      const instanceId = selectedInstance?.id;
+      setStatus("launching");
+
+      try {
+        await window.instancesAPI.launch(instanceId);
+        // Не возвращаем статус назад сразу — игра запускается
+      } catch (err: any) {
+        console.error("Ошибка запуска:", err);
+        showAlert(`Launching error: ${err.message}`, "error");
+        setStatus("installed");
+      }
+    }
+  };
 
   return (
     <div className="p-4 flex flex-col gap-4 h-full">
@@ -134,7 +156,7 @@ export default function InstancesPage() {
           <div
             className={
               viewMode === "grid"
-                ? "grid grid-cols-5 gap-4"
+                ? "grid grid-cols-4 xl:grid-cols-5 gap-4"
                 : "flex flex-col gap-2"
             }
           >
@@ -142,6 +164,7 @@ export default function InstancesPage() {
               <div
                 key={`${instance.id || instance.name}-${viewMode}`}
                 onClick={() => setSelectedInstance(instance)}
+                onDoubleClick={() => handleLaunch()}
                 className="min-w-0 cursor-pointer active:scale-[0.99] transition-transform duration-150 will-change-transform"
                 style={{
                   animation: "fadeInUp 0.2s ease-out both",
@@ -162,6 +185,8 @@ export default function InstancesPage() {
       />
       <AbsoluteGameBar
         instance={selectedInstance}
+        status={status}
+        setStatus={setStatus}
         onClose={() => setSelectedInstance(null)}
       />
     </div>
