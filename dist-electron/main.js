@@ -2,7 +2,7 @@ import "electron";
 import "node:module";
 import "node:url";
 import "node:path";
-import { M, R, V } from "./main-BJusCVm4.js";
+import { M, R, V } from "./main-BCpSWIgM.js";
 export {
   M as MAIN_DIST,
   R as RENDERER_DIST,

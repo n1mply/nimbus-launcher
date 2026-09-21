@@ -63,6 +63,7 @@ export interface DownloadTask {
 export interface IntegrityResult {
   queue: DownloadTask[];
   totalBytesToDownload: number;
+  modloaderVersion: string | null;
 }
 
 

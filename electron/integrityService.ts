@@ -226,7 +226,6 @@ export class IntegrityService {
     }
 
     // 5. Обработка загрузчика Fabric
-    let launchVersionId = minecraftVersion;
     let resolvedLoaderVersion: string | null = modloaderVersion ?? null;
 
     if (modloader === "fabric") {
@@ -244,7 +243,6 @@ export class IntegrityService {
         );
       }
       const fabricJson = await profileRes.json();
-      launchVersionId = fabricJson.id; // fabric-loader-<loader>-<mc>
 
       const fabricVersionDir = path.join(versionsDir, fabricJson.id);
       await fsp.mkdir(fabricVersionDir, { recursive: true });
@@ -281,7 +279,7 @@ export class IntegrityService {
       (sum, item) => sum + (item.size || 0),
       0,
     );
-    return { queue, totalBytesToDownload };
+    return { queue, totalBytesToDownload, modloaderVersion: resolvedLoaderVersion };
   }
 
   private isRuleAllowed(rules: any[]): boolean {

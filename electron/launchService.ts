@@ -70,6 +70,40 @@ export class LaunchService {
     this.javaService = new JavaService();
   }
 
+  private async loadMergedVersion(
+    versionsDir: string,
+    versionId: string,
+  ): Promise<any> {
+    const p = path.join(versionsDir, versionId, `${versionId}.json`);
+    if (!fs.existsSync(p)) {
+      throw new Error(
+        `Манифест версии не найден: ${p}. Переустановите инстанс`,
+      );
+    }
+    const child = JSON.parse(await fsp.readFile(p, "utf-8"));
+    if (!child.inheritsFrom) return child;
+
+    const parent = await this.loadMergedVersion(
+      versionsDir,
+      child.inheritsFrom,
+    );
+    return {
+      ...parent,
+      ...child,
+      mainClass: child.mainClass ?? parent.mainClass,
+      assetIndex: child.assetIndex ?? parent.assetIndex,
+      // дочерние библиотеки первыми: при дедупликации побеждает Fabric
+      libraries: [...(child.libraries ?? []), ...(parent.libraries ?? [])],
+      arguments: {
+        game: [
+          ...(parent.arguments?.game ?? []),
+          ...(child.arguments?.game ?? []),
+        ],
+        jvm: parent.arguments?.jvm ?? [],
+      },
+    };
+  }
+
   public async launch(instanceId: string, win?: BrowserWindow): Promise<void> {
     const t0 = performance.now();
     console.log(
@@ -84,38 +118,22 @@ export class LaunchService {
 
     // 1. Определение файлов версий
     const isFabric = instance.modloader === "fabric";
+
+    if (isFabric && !instance.modloaderVersion) {
+      throw new Error(
+        "Fabric not installed: modloaderVersion is not set. Reinstall the instance!",
+      );
+    }
+
     const versionId = isFabric
       ? `fabric-loader-${instance.modloaderVersion}-${instance.minecraftVersion}`
       : instance.minecraftVersion;
 
-    const versionJsonPath = path.join(
-      versionsDir,
-      versionId,
-      `${versionId}.json`,
-    );
-    const vanillaJsonPath = path.join(
-      versionsDir,
-      instance.minecraftVersion,
-      `${instance.minecraftVersion}.json`,
-    );
-
-    const targetJsonPath = fs.existsSync(versionJsonPath)
-      ? versionJsonPath
-      : vanillaJsonPath;
-    if (!fs.existsSync(targetJsonPath)) {
-      throw new Error(`Манифест версии не найден: ${targetJsonPath}`);
-    }
-
-    const versionData = JSON.parse(await fsp.readFile(targetJsonPath, "utf-8"));
-
-    let vanillaData: any = null;
-    if (isFabric && fs.existsSync(vanillaJsonPath)) {
-      vanillaData = JSON.parse(await fsp.readFile(vanillaJsonPath, "utf-8"));
-    }
+    const versionData = await this.loadMergedVersion(versionsDir, versionId);
 
     const javaMajor = this.javaService.getRecommendedJavaVersion(
       instance.minecraftVersion,
-      vanillaData || versionData,
+      versionData,
     );
 
     // 2. Быстрое получение Java и токена аккаунта
@@ -126,29 +144,30 @@ export class LaunchService {
 
     // 3. Формирование Classpath
     const classpathEntries: string[] = [];
-    const resolveLibs = (libs: any[]) => {
-      for (const lib of libs) {
-        if (lib.downloads?.artifact) {
-          classpathEntries.push(
-            path.join(librariesDir, lib.downloads.artifact.path),
-          );
-        } else if (lib.name) {
-          const parts = lib.name.split(":");
-          classpathEntries.push(
-            path.join(
-              librariesDir,
-              ...parts[0].split("."),
-              parts[1],
-              parts[2],
-              `${parts[1]}-${parts[2]}.jar`,
-            ),
-          );
-        }
-      }
-    };
+    const seen = new Set<string>();
 
-    resolveLibs(versionData.libraries || []);
-    if (isFabric && vanillaData) resolveLibs(vanillaData.libraries || []);
+    for (const lib of versionData.libraries || []) {
+      const key = lib.name
+        ?.split(":")
+        .filter((_: string, i: number) => i !== 2)
+        .join(":");
+      if (key) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+
+      if (lib.downloads?.artifact) {
+        classpathEntries.push(
+          path.join(librariesDir, lib.downloads.artifact.path),
+        );
+      } else if (lib.name) {
+        const [g, a, v, c] = lib.name.split(":");
+        const jar = c ? `${a}-${v}-${c}.jar` : `${a}-${v}.jar`;
+        classpathEntries.push(
+          path.join(librariesDir, ...g.split("."), a, v, jar),
+        );
+      }
+    }
 
     const clientJar = path.join(
       versionsDir,
@@ -171,13 +190,6 @@ export class LaunchService {
       librariesDir,
       nativesDir,
     );
-    if (isFabric && vanillaData) {
-      await this.extractNatives(
-        vanillaData.libraries || [],
-        librariesDir,
-        nativesDir,
-      );
-    }
 
     const jvmArgs = [
       // Быстрый старт с 512M и потолок до 3G
@@ -199,6 +211,7 @@ export class LaunchService {
       `-Dio.netty.native.workdir=${nativesDir}`,
       "-Dminecraft.launcher.brand=nimbus-launcher",
       "-Dminecraft.launcher.version=1.0.0",
+      "-Djava.net.preferIPv4Stack=true",
 
       // Передаем Classpath напрямую
       "-cp",
@@ -211,10 +224,9 @@ export class LaunchService {
     const gameArgsTemplate: string[] = [];
     if (versionData.minecraftArguments) {
       gameArgsTemplate.push(...versionData.minecraftArguments.split(" "));
-    } else if (versionData.arguments?.game) {
-      for (const a of versionData.arguments.game) {
-        if (typeof a === "string") gameArgsTemplate.push(a);
-      }
+    }
+    for (const a of versionData.arguments?.game ?? []) {
+      if (typeof a === "string") gameArgsTemplate.push(a);
     }
     const replacements: Record<string, string> = {
       "${auth_player_name}": credentials.username,
@@ -222,8 +234,7 @@ export class LaunchService {
       "${game_directory}": mcDir,
       "${assets_root}": assetsDir,
       "${assets_index_name}":
-        versionData.assetIndex?.id ||
-        (vanillaData?.assetIndex?.id ?? instance.minecraftVersion),
+        versionData.assetIndex?.id ?? instance.minecraftVersion,
       "${auth_uuid}": formatUuidWithDashes(credentials.uuid),
       "${auth_access_token}": credentials.accessToken,
       "${user_type}": credentials.userType,

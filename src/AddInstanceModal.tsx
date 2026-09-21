@@ -19,7 +19,6 @@ type Props = {
   onSuccess: () => void;
 };
 
-// Моковые данные — заменить на реальные из window.versions.getGameVersions() / getLoaderVersions()
 const LOADERS: { id: Instance["modloader"]; label: string }[] = [
   { id: "vanilla", label: "Vanilla" },
   { id: "fabric", label: "Fabric" },
@@ -28,7 +27,11 @@ const LOADERS: { id: Instance["modloader"]; label: string }[] = [
   { id: "quilt", label: "Quilt" },
 ];
 
-export default function AddInstanceModal({ isOpen, onClose, onSuccess }: Props) {
+export default function AddInstanceModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: Props) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [modloader, setModloader] = useState<Instance["modloader"]>("vanilla");
@@ -90,12 +93,12 @@ export default function AddInstanceModal({ isOpen, onClose, onSuccess }: Props) 
   const fetchLoaderVersions = async (loaderName: string, mcVersion: string) => {
     try {
       setLoading(true);
+      setLoaderVersions([]);
       const data = await window.versions.getLoaderVersions(
         loaderName,
         mcVersion,
       );
       setLoaderVersions(data);
-      console.log(loaderName, loaderVersions);
     } catch (err) {
       console.error(err.message);
     } finally {
@@ -107,26 +110,29 @@ export default function AddInstanceModal({ isOpen, onClose, onSuccess }: Props) 
     name.trim().length > 0 &&
     minecraftVersion.trim().length > 0 &&
     (!isLoaderSectionVisible ||
-      loaderVersionMode === "latest" ||
-      loaderVersion.trim().length > 0);
+      (loaderVersionMode === "latest"
+        ? loaderVersions.length > 0
+        : loaderVersion.trim().length > 0));
 
   const handleCreate = async () => {
     if (!canSubmit) return;
+
+    const resolvedLoaderVersion = !isLoaderSectionVisible
+      ? null
+      : loaderVersionMode === "other"
+        ? loaderVersion
+        : loaderVersions[0]; // Latest = первая версия из списка
 
     const payload = {
       name,
       modloader,
       minecraftVersion,
-      modloaderVersion:
-        isLoaderSectionVisible && loaderVersionMode === "other"
-          ? loaderVersion
-          : null,
+      modloaderVersion: resolvedLoaderVersion,
       instanceIconPath: iconFilePath,
     };
 
     try {
       const response = await window.instancesAPI.create(payload);
-
 
       if (response.success) {
         if (onSuccess) onSuccess();
