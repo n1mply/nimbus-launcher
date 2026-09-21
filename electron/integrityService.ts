@@ -8,6 +8,18 @@ const MOJANG_MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const MOJANG_RESOURCES_BASE = "https://resources.download.minecraft.net";
 
+const PROFILE_LOADERS: Record<string, { metaBase: string; idPrefix: string }> =
+  {
+    fabric: {
+      metaBase: "https://meta.fabricmc.net/v2",
+      idPrefix: "fabric-loader",
+    },
+    quilt: {
+      metaBase: "https://meta.quiltmc.org/v3",
+      idPrefix: "quilt-loader",
+    },
+  };
+
 export class IntegrityService {
   private dm: DownloadManager;
 
@@ -76,23 +88,24 @@ export class IntegrityService {
     return versionJson;
   }
 
-  private async resolveFabricLoaderVersion(
+  private async resolveLoaderVersion(
+    metaBase: string,
     mcVersion: string,
     requested?: string | null,
   ): Promise<string> {
     if (requested) return requested;
 
     const res = await fetch(
-      `https://meta.fabricmc.net/v2/versions/loader/${encodeURIComponent(mcVersion)}`,
+      `${metaBase}/versions/loader/${encodeURIComponent(mcVersion)}`,
     );
-    if (!res.ok) throw new Error(`Fabric Meta: HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`Loader meta: HTTP ${res.status}`);
 
     const list: any[] = await res.json();
     if (!Array.isArray(list) || list.length === 0) {
-      throw new Error(`Fabric не поддерживает Minecraft ${mcVersion}`);
+      throw new Error(`Загрузчик не поддерживает Minecraft ${mcVersion}`);
     }
-    const entry = list.find((e) => e.loader?.stable) ?? list[0];
-    return entry.loader.version;
+    // у Fabric есть флаг stable, у Quilt его нет — берём просто первый (самый новый)
+    return (list.find((e) => e.loader?.stable) ?? list[0]).loader.version;
   }
 
   /**
@@ -225,34 +238,37 @@ export class IntegrityService {
       }
     }
 
-    // 5. Обработка загрузчика Fabric
+    // 5. Обработка загрузчиков Fabric\Quilt
     let resolvedLoaderVersion: string | null = modloaderVersion ?? null;
 
-    if (modloader === "fabric") {
-      const loaderVersion = await this.resolveFabricLoaderVersion(
+    const profileCfg = PROFILE_LOADERS[modloader];
+    if (profileCfg) {
+      const loaderVersion = await this.resolveLoaderVersion(
+        profileCfg.metaBase,
         minecraftVersion,
         modloaderVersion,
       );
       resolvedLoaderVersion = loaderVersion;
 
-      const profileUrl = `https://meta.fabricmc.net/v2/versions/loader/${minecraftVersion}/${loaderVersion}/profile/json`;
-      const profileRes = await fetch(profileUrl);
+      const profileRes = await fetch(
+        `${profileCfg.metaBase}/versions/loader/${minecraftVersion}/${loaderVersion}/profile/json`,
+      );
       if (!profileRes.ok) {
         throw new Error(
-          `Failed to get Fabric profile (HTTP ${profileRes.status})`,
+          `Не удалось получить профиль ${modloader} (HTTP ${profileRes.status})`,
         );
       }
-      const fabricJson = await profileRes.json();
+      const profileJson = await profileRes.json();
 
-      const fabricVersionDir = path.join(versionsDir, fabricJson.id);
-      await fsp.mkdir(fabricVersionDir, { recursive: true });
+      const profileDir = path.join(versionsDir, profileJson.id);
+      await fsp.mkdir(profileDir, { recursive: true });
       await fsp.writeFile(
-        path.join(fabricVersionDir, `${fabricJson.id}.json`),
-        JSON.stringify(fabricJson, null, 2),
+        path.join(profileDir, `${profileJson.id}.json`),
+        JSON.stringify(profileJson, null, 2),
         "utf-8",
       );
 
-      for (const lib of fabricJson.libraries || []) {
+      for (const lib of profileJson.libraries || []) {
         const [group, artifact, ver, classifier] = lib.name.split(":");
         const jarName = classifier
           ? `${artifact}-${ver}-${classifier}.jar`
@@ -279,7 +295,11 @@ export class IntegrityService {
       (sum, item) => sum + (item.size || 0),
       0,
     );
-    return { queue, totalBytesToDownload, modloaderVersion: resolvedLoaderVersion };
+    return {
+      queue,
+      totalBytesToDownload,
+      modloaderVersion: resolvedLoaderVersion,
+    };
   }
 
   private isRuleAllowed(rules: any[]): boolean {

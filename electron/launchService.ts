@@ -116,17 +116,20 @@ export class LaunchService {
     const librariesDir = path.join(mcDir, "libraries");
     const assetsDir = path.join(mcDir, "assets");
 
-    // 1. Определение файлов версий
-    const isFabric = instance.modloader === "fabric";
+    const LOADER_ID_PREFIX: Record<string, string> = {
+      fabric: "fabric-loader",
+      quilt: "quilt-loader",
+    };
+    const idPrefix = LOADER_ID_PREFIX[instance.modloader];
 
-    if (isFabric && !instance.modloaderVersion) {
+    if (idPrefix && !instance.modloaderVersion) {
       throw new Error(
-        "Fabric not installed: modloaderVersion is not set. Reinstall the instance!",
+        `${instance.modloader} not installed: modloaderVersion is not set. Reinstall the instance!`,
       );
     }
 
-    const versionId = isFabric
-      ? `fabric-loader-${instance.modloaderVersion}-${instance.minecraftVersion}`
+    const versionId = idPrefix
+      ? `${idPrefix}-${instance.modloaderVersion}-${instance.minecraftVersion}`
       : instance.minecraftVersion;
 
     const versionData = await this.loadMergedVersion(versionsDir, versionId);
