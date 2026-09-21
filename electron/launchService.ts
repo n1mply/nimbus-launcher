@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -13,6 +14,53 @@ import { formatUuidWithDashes, getAccountCredentials } from "./auth";
 import { Titles } from "prismarine-auth";
 
 export class LaunchService {
+  private rulesAllow(rules?: any[]): boolean {
+    if (!rules?.length) return true;
+    const osName =
+      process.platform === "win32"
+        ? "windows"
+        : process.platform === "darwin"
+          ? "osx"
+          : "linux";
+
+    let allowed = false;
+    for (const r of rules) {
+      if (r.features) continue; // demo, custom resolution и т.п. не включаем
+      let matches = true;
+      if (r.os) {
+        if (r.os.name && r.os.name !== osName) matches = false;
+        if (
+          r.os.arch &&
+          (r.os.arch === "x86"
+            ? process.arch !== "ia32"
+            : r.os.arch !== process.arch)
+        )
+          matches = false;
+        if (r.os.version && !new RegExp(r.os.version).test(os.release()))
+          matches = false;
+      }
+      if (matches) allowed = r.action === "allow";
+    }
+    return allowed;
+  }
+
+  private resolveArgs(list: any[], vars: Record<string, string>): string[] {
+    const out: string[] = [];
+    for (const a of list) {
+      if (typeof a === "string") out.push(a);
+      else if (this.rulesAllow(a.rules))
+        out.push(...(Array.isArray(a.value) ? a.value : [a.value]));
+    }
+    return (
+      out
+        // трюк для официального лаунчера, нам не нужен (Fabric и Quilt без него работают)
+        .filter((a) => !a.includes("FabricMcEmu"))
+        .map((a) =>
+          Object.entries(vars).reduce((s, [k, v]) => s.split(k).join(v), a),
+        )
+    );
+  }
+
   private async extractNatives(
     libs: any[],
     librariesDir: string,
@@ -99,7 +147,10 @@ export class LaunchService {
           ...(parent.arguments?.game ?? []),
           ...(child.arguments?.game ?? []),
         ],
-        jvm: parent.arguments?.jvm ?? [],
+        jvm: [
+          ...(parent.arguments?.jvm ?? []),
+          ...(child.arguments?.jvm ?? []),
+        ],
       },
     };
   }
@@ -122,15 +173,18 @@ export class LaunchService {
     };
     const idPrefix = LOADER_ID_PREFIX[instance.modloader];
 
-    if (idPrefix && !instance.modloaderVersion) {
-      throw new Error(
-        `${instance.modloader} not installed: modloaderVersion is not set. Reinstall the instance!`,
-      );
+    let versionId: string | null = instance.launchVersionId ?? null;
+    if (!versionId) {
+      if (instance.modloader === "vanilla") {
+        versionId = instance.minecraftVersion;
+      } else if (idPrefix && instance.modloaderVersion) {
+        versionId = `${idPrefix}-${instance.modloaderVersion}-${instance.minecraftVersion}`;
+      } else {
+        throw new Error(
+          `${instance.modloader} is not installed properly. Reinstall the instance!`,
+        );
+      }
     }
-
-    const versionId = idPrefix
-      ? `${idPrefix}-${instance.modloaderVersion}-${instance.minecraftVersion}`
-      : instance.minecraftVersion;
 
     const versionData = await this.loadMergedVersion(versionsDir, versionId);
 
@@ -172,12 +226,14 @@ export class LaunchService {
       }
     }
 
-    const clientJar = path.join(
-      versionsDir,
-      instance.minecraftVersion,
-      `${instance.minecraftVersion}.jar`,
-    );
-    if (fs.existsSync(clientJar)) classpathEntries.push(clientJar);
+    if (instance.modloader !== "neoforge") {
+      const clientJar = path.join(
+        versionsDir,
+        instance.minecraftVersion,
+        `${instance.minecraftVersion}.jar`,
+      );
+      if (fs.existsSync(clientJar)) classpathEntries.push(clientJar);
+    }
 
     const cpSeparator = process.platform === "win32" ? ";" : ":";
     const fullClasspath = classpathEntries
@@ -194,12 +250,29 @@ export class LaunchService {
       nativesDir,
     );
 
+    const profileJvm = this.resolveArgs(versionData.arguments?.jvm ?? [], {
+      "${natives_directory}": nativesDir,
+      "${launcher_name}": "nimbus-launcher",
+      "${launcher_version}": "1.0.0",
+      "${classpath}": fullClasspath,
+      "${classpath_separator}": cpSeparator,
+      "${library_directory}": librariesDir,
+      "${version_name}": versionId,
+    });
+
+    // Старые версии (до 1.13) не имеют arguments.jvm — задаём минимум сами
+    const legacyJvm = [
+      `-Djava.library.path=${nativesDir}`,
+      "-Dminecraft.launcher.brand=nimbus-launcher",
+      "-Dminecraft.launcher.version=1.0.0",
+    ];
+    const hasClasspath = profileJvm.some(
+      (a) => a === "-cp" || a === "-classpath",
+    );
+
     const jvmArgs = [
-      // Быстрый старт с 512M и потолок до 3G
       "-Xms512M",
       "-Xmx3G",
-
-      // Быстрый сборщик мусора G1GC
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseG1GC",
       "-XX:G1NewSizePercent=20",
@@ -207,18 +280,12 @@ export class LaunchService {
       "-XX:MaxGCPauseMillis=50",
       "-XX:G1HeapRegionSize=32M",
 
-      // Пути к нативным библиотекам игры
-      `-Djava.library.path=${nativesDir}`,
       `-Djna.tmpdir=${nativesDir}`,
       `-Dorg.lwjgl.system.SharedLibraryExtractPath=${nativesDir}`,
       `-Dio.netty.native.workdir=${nativesDir}`,
-      "-Dminecraft.launcher.brand=nimbus-launcher",
-      "-Dminecraft.launcher.version=1.0.0",
-      "-Djava.net.preferIPv4Stack=true",
 
-      // Передаем Classpath напрямую
-      "-cp",
-      fullClasspath,
+      ...(profileJvm.length ? profileJvm : legacyJvm),
+      ...(hasClasspath ? [] : ["-cp", fullClasspath]),
 
       versionData.mainClass,
     ];

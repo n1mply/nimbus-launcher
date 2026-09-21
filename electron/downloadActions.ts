@@ -8,12 +8,14 @@ import {
   setInstanceStatus,
   writeInstance,
 } from "./instanceManager";
+import { LoaderInstaller } from "./loaderInstaller";
 
 const activeControllers = new Map<string, AbortController>();
 
 export function registerDownloadActions(mainWindow: BrowserWindow): void {
   const integrityService = new IntegrityService();
   const downloadManager = new DownloadManager(8);
+  const loaderInstaller = new LoaderInstaller(downloadManager);
   const javaService = new JavaService();
 
   ipcMain.handle("instance:install", async (_, instanceId: string) => {
@@ -41,7 +43,7 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
       const javaMajor = javaService.getRecommendedJavaVersion(
         instance.minecraftVersion,
       );
-      await javaService.ensureJava(javaMajor, (prog) => {
+      const javaPath = await javaService.ensureJava(javaMajor, (prog) => {
         mainWindow.webContents.send("download:progress", {
           instanceId,
           statusText: "Loading Java Runtime...",
@@ -63,7 +65,7 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
         totalBytes: 0,
       });
 
-      const { queue, totalBytesToDownload, modloaderVersion } =
+      const { queue, totalBytesToDownload, modloaderVersion, versionId } =
         await integrityService.buildIntegrityQueue(
           mcDir,
           instance.minecraftVersion,
@@ -71,7 +73,6 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
           instance.modloaderVersion,
         );
 
-      await writeInstance(instanceId, { modloaderVersion });
       // 3. Загрузка недостающих файлов
       if (queue.length > 0) {
         await downloadManager.downloadQueue(
@@ -95,6 +96,29 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
           abortController.signal,
         );
       }
+
+      let launchVersionId = versionId;
+
+      if (instance.modloader === "forge" || instance.modloader === "neoforge") {
+        launchVersionId = await loaderInstaller.install({
+          mcDir,
+          modloader: instance.modloader,
+          mcVersion: instance.minecraftVersion,
+          loaderVersion: modloaderVersion,
+          javaPath,
+          signal: abortController.signal,
+          onLog: (line) =>
+            mainWindow.webContents.send("download:progress", {
+              instanceId,
+              statusText: `Installing ${instance.modloader}: ${line.slice(0, 60)}`,
+              progress: 99,
+              downloadedBytes: 0,
+              totalBytes: 0,
+            }),
+        });
+      }
+
+      await writeInstance(instanceId, { modloaderVersion, launchVersionId });
 
       await setInstanceStatus(instanceId, "installed");
       mainWindow.webContents.send("download:complete", { instanceId });

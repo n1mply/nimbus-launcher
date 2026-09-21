@@ -62,7 +62,7 @@ export default function AddInstanceModal({
       case "neoforge":
         return "1.20.1";
       case "forge":
-        return "1.1";
+        return "1.6.1";
       case "vanilla":
       default:
         return null;

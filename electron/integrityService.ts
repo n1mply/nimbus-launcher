@@ -240,6 +240,7 @@ export class IntegrityService {
 
     // 5. Обработка загрузчиков Fabric\Quilt
     let resolvedLoaderVersion: string | null = modloaderVersion ?? null;
+    let launchVersionId: string | null = minecraftVersion;
 
     const profileCfg = PROFILE_LOADERS[modloader];
     if (profileCfg) {
@@ -259,6 +260,7 @@ export class IntegrityService {
         );
       }
       const profileJson = await profileRes.json();
+      launchVersionId = profileJson.id;
 
       const profileDir = path.join(versionsDir, profileJson.id);
       await fsp.mkdir(profileDir, { recursive: true });
@@ -295,10 +297,15 @@ export class IntegrityService {
       (sum, item) => sum + (item.size || 0),
       0,
     );
+    
+    if (modloader === "forge" || modloader === "neoforge")
+      launchVersionId = null;
+
     return {
       queue,
       totalBytesToDownload,
       modloaderVersion: resolvedLoaderVersion,
+      versionId: launchVersionId,
     };
   }
 

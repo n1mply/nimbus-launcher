@@ -1,33 +1,35 @@
-import { app } from 'electron';
-import path from 'node:path';
-import fs from 'node:fs';
-import fsp from 'node:fs/promises';
-import { spawn, execSync } from 'node:child_process';
-import { DownloadManager } from './downloadManager';
+import { app } from "electron";
+import path from "node:path";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import { spawn, execSync } from "node:child_process";
+import { DownloadManager } from "./downloadManager";
 
 export class JavaService {
   private javaRootDir: string;
   private dm: DownloadManager;
 
   constructor() {
-    this.javaRootDir = path.join(app.getPath('userData'), 'runtimes');
+    this.javaRootDir = path.join(app.getPath("userData"), "runtimes");
     this.dm = new DownloadManager(2);
   }
 
   /**
    * Считывает реальную мажорную версию любого бинарника Java
    */
-  public async getExactJavaVersion(executablePath: string): Promise<number | null> {
+  public async getExactJavaVersion(
+    executablePath: string,
+  ): Promise<number | null> {
     if (!fs.existsSync(executablePath)) return null;
 
     return new Promise((resolve) => {
-      const proc = spawn(executablePath, ['-version']);
-      let output = '';
+      const proc = spawn(executablePath, ["-version"]);
+      let output = "";
 
-      proc.stderr.on('data', (d) => (output += d.toString()));
-      proc.stdout.on('data', (d) => (output += d.toString()));
+      proc.stderr.on("data", (d) => (output += d.toString()));
+      proc.stdout.on("data", (d) => (output += d.toString()));
 
-      proc.on('close', () => {
+      proc.on("close", () => {
         // Ловит: "1.8.0_..." -> 8, "17.0.2" -> 17, "21.0.1" -> 21, "25-ea" -> 25
         const match = output.match(/version\s+"(?:1\.)?(\d+)/i);
         if (match && match[1]) {
@@ -37,7 +39,7 @@ export class JavaService {
         }
       });
 
-      proc.on('error', () => resolve(null));
+      proc.on("error", () => resolve(null));
     });
   }
 
@@ -46,15 +48,17 @@ export class JavaService {
    */
   public async getValidSystemJava(targetMajor: number): Promise<string | null> {
     try {
-      const cmd = process.platform === 'win32' ? 'where java' : 'which java';
-      const output = execSync(cmd, { encoding: 'utf-8' }).trim();
+      const cmd = process.platform === "win32" ? "where java" : "which java";
+      const output = execSync(cmd, { encoding: "utf-8" }).trim();
       const paths = output.split(/\r?\n/);
 
       for (const p of paths) {
         if (fs.existsSync(p)) {
           const version = await this.getExactJavaVersion(p);
           if (version === targetMajor) {
-            console.log(`[JavaService] A suitable system component has been found Java ${targetMajor}: ${p}`);
+            console.log(
+              `[JavaService] A suitable system component has been found Java ${targetMajor}: ${p}`,
+            );
             return p;
           }
         }
@@ -65,16 +69,18 @@ export class JavaService {
     return null;
   }
 
-  public getRecommendedJavaVersion(minecraftVersion?: string, versionJson?: any): number {
+  public getRecommendedJavaVersion(
+    minecraftVersion?: string,
+    versionJson?: any,
+  ): number {
     if (versionJson?.javaVersion?.majorVersion) {
-      return Number(versionJson.javaVersion.majorVersion);
+      const major = Number(versionJson.javaVersion.majorVersion);
+      return major === 16 ? 17 : major;
     }
 
     if (!minecraftVersion) return 21;
 
-    const clean = minecraftVersion.replace(/[^0-9.]/g, '');
-    const match = clean.match(/1\.(\d+)(?:\.(\d+))?/);
-
+    const match = minecraftVersion.match(/^1\.(\d+)(?:\.(\d+))?/);
     if (!match) return 21;
 
     const minor = parseInt(match[1], 10);
@@ -97,12 +103,12 @@ export class JavaService {
     const platform = process.platform;
     const binFolder = path.join(this.javaRootDir, `java-${majorVersion}`);
 
-    if (platform === 'win32') {
-      return path.join(binFolder, 'bin', 'java.exe');
-    } else if (platform === 'darwin') {
-      return path.join(binFolder, 'Contents', 'Home', 'bin', 'java');
+    if (platform === "win32") {
+      return path.join(binFolder, "bin", "java.exe");
+    } else if (platform === "darwin") {
+      return path.join(binFolder, "Contents", "Home", "bin", "java");
     }
-    return path.join(binFolder, 'bin', 'java');
+    return path.join(binFolder, "bin", "java");
   }
 
   /**
@@ -110,7 +116,11 @@ export class JavaService {
    */
   public async ensureJava(
     majorVersion: number,
-    onProgress?: (progress: { totalBytes: number; downloadedBytes: number; currentTaskName: string }) => void
+    onProgress?: (progress: {
+      totalBytes: number;
+      downloadedBytes: number;
+      currentTaskName: string;
+    }) => void,
   ): Promise<string> {
     await fsp.mkdir(this.javaRootDir, { recursive: true });
 
@@ -118,7 +128,9 @@ export class JavaService {
     const localExec = this.getLocalJavaPath(majorVersion);
     const localVer = await this.getExactJavaVersion(localExec);
     if (localVer === majorVersion) {
-      console.log(`[JavaService] Local Java ${majorVersion} проверена и готова.`);
+      console.log(
+        `[JavaService] Local Java ${majorVersion} проверена и готова.`,
+      );
       return localExec;
     }
 
@@ -129,35 +141,55 @@ export class JavaService {
     }
 
     // 3. Если нужной версии нет нигде — скачиваем портативную с Adoptium
-    console.log(`[JavaService] Java ${majorVersion} не найдена. Начинаем загрузку...`);
+    console.log(
+      `[JavaService] Java ${majorVersion} не найдена. Начинаем загрузку...`,
+    );
 
-    const os = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'mac' : 'linux';
-    const arch = process.arch === 'x64' ? 'x64' : process.arch === 'arm64' ? 'aarch64' : 'x86';
-    const archiveExt = os === 'windows' ? 'zip' : 'tar.gz';
-    const archivePath = path.join(this.javaRootDir, `java-${majorVersion}.${archiveExt}`);
+    const os =
+      process.platform === "win32"
+        ? "windows"
+        : process.platform === "darwin"
+          ? "mac"
+          : "linux";
+    const arch =
+      process.arch === "x64"
+        ? "x64"
+        : process.arch === "arm64"
+          ? "aarch64"
+          : "x86";
+    const archiveExt = os === "windows" ? "zip" : "tar.gz";
+    const archivePath = path.join(
+      this.javaRootDir,
+      `java-${majorVersion}.${archiveExt}`,
+    );
     const extractDir = path.join(this.javaRootDir, `temp-java-${majorVersion}`);
 
     // Пробуем стабильный релиз (ga), если 404 (как для Java 25) — пробуем ранний доступ (ea)
     let downloadUrl = `https://api.adoptium.net/v3/binary/latest/${majorVersion}/ga/${os}/${arch}/jdk/hotspot/normal/eclipse`;
-    let res = await fetch(downloadUrl, { method: 'HEAD' });
+    let res = await fetch(downloadUrl, { method: "HEAD" });
 
     if (!res.ok) {
-      console.log(`[JavaService] Релиз GA для Java ${majorVersion} недоступен, переключаемся на Early Access (EA)...`);
+      console.log(
+        `[JavaService] Релиз GA для Java ${majorVersion} недоступен, переключаемся на Early Access (EA)...`,
+      );
       downloadUrl = `https://api.adoptium.net/v3/binary/latest/${majorVersion}/ea/${os}/${arch}/jdk/hotspot/normal/eclipse`;
     }
 
-    await this.dm.downloadQueue([{ url: downloadUrl, targetPath: archivePath, size: 0 }], onProgress);
+    await this.dm.downloadQueue(
+      [{ url: downloadUrl, targetPath: archivePath, size: 0 }],
+      onProgress,
+    );
 
     console.log(`[JavaService] Распаковка архива Java ${majorVersion}...`);
     await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
     await fsp.mkdir(extractDir, { recursive: true });
 
-    if (archiveExt === 'zip') {
-      const AdmZip = (await import('adm-zip')).default;
+    if (archiveExt === "zip") {
+      const AdmZip = (await import("adm-zip")).default;
       const zip = new AdmZip(archivePath);
       zip.extractAllTo(extractDir, true);
     } else {
-      const tar = await import('tar');
+      const tar = await import("tar");
       await tar.x({ file: archivePath, cwd: extractDir });
     }
 
@@ -174,7 +206,9 @@ export class JavaService {
     await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
 
     const finalExec = this.getLocalJavaPath(majorVersion);
-    console.log(`[JavaService] Java ${majorVersion} успешно установлена в: ${finalExec}`);
+    console.log(
+      `[JavaService] Java ${majorVersion} успешно установлена в: ${finalExec}`,
+    );
     return finalExec;
   }
 }

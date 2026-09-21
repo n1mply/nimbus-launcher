@@ -32,6 +32,7 @@ export type Instance = {
   modloader: ModloaderType;
   minecraftVersion: string;
   modloaderVersion?: string | null;
+  launchVersionId?: string | null;
   instanceIconPath?: string;
   status?: InstanceStatus;
 };
@@ -64,7 +65,12 @@ export interface IntegrityResult {
   queue: DownloadTask[];
   totalBytesToDownload: number;
   modloaderVersion: string | null;
+  versionId: string | null; // null = id определит установщик загрузчика (Forge/NeoForge)
 }
 
-
-export type Status = "loading" | "installed" | "not_installed" | "launching" | "error";
+export type Status =
+  | "loading"
+  | "installed"
+  | "not_installed"
+  | "launching"
+  | "error";
