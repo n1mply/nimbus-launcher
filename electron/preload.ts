@@ -64,6 +64,7 @@ const instancesApiMethods = {
     ipcRenderer.invoke("instance:cancel-install", instanceId),
   launch: (instanceId: string) =>
     ipcRenderer.invoke("instance:launch", instanceId),
+  stop: (instanceId: string) => ipcRenderer.invoke("instance:stop", instanceId),
 
   // Слушатели событий загрузки
   onProgress: (callback: (data: any) => void) => {
@@ -83,12 +84,20 @@ const instancesApiMethods = {
   },
 
   // Слушатели событий игры
-  onGameLog: (callback: (data: { instanceId: string; log: string; error?: boolean }) => void) => {
+  onGameLog: (
+    callback: (data: {
+      instanceId: string;
+      log: string;
+      error?: boolean;
+    }) => void,
+  ) => {
     const sub = (_: any, data: any) => callback(data);
     ipcRenderer.on("game:log", sub);
     return () => ipcRenderer.removeListener("game:log", sub);
   },
-  onGameCrashed: (callback: (data: { instanceId: string; exitCode: number }) => void) => {
+  onGameCrashed: (
+    callback: (data: { instanceId: string; exitCode: number }) => void,
+  ) => {
     const sub = (_: any, data: any) => callback(data);
     ipcRenderer.on("game:crashed", sub);
     return () => ipcRenderer.removeListener("game:crashed", sub);

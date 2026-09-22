@@ -51,22 +51,33 @@ export default function InstancesPage() {
   const hasNoSearchResults =
     !hasNoInstancesAtAll && !isLoading && filteredInstances.length === 0;
 
-  const handleLaunch = async () => {
-    console.log("D2");
-    if (status === "installed") {
-      const instanceId = selectedInstance?.id;
-      setStatus("launching");
+  const handleLaunch = async (targetInstance: Instance) => {
+  const instanceId = targetInstance.id || targetInstance.name;
 
-      try {
-        await window.instancesAPI.launch(instanceId);
-        // Не возвращаем статус назад сразу — игра запускается
-      } catch (err: any) {
-        console.error("Ошибка запуска:", err);
-        showAlert(`Launching error: ${err.message}`, "error");
-        setStatus("installed");
-      }
+  if (status === "installed") {
+    setStatus("launching");
+    try {
+      await window.instancesAPI.launch(instanceId);
+      setStatus("running");
+    } catch (err: any) {
+      console.error("Ошибка запуска:", err);
+      showAlert(`Launching error: ${err.message}`, "error");
+      setStatus("installed");
     }
-  };
+    return;
+  }
+
+  if (status === "running") {
+    try {
+      await window.instancesAPI.stop(instanceId);
+      // статус вернётся в "installed" через событие game:closed,
+      // которое слушает AbsoluteGameBar
+    } catch (err: any) {
+      console.error("Ошибка остановки:", err);
+      showAlert(`Stop error: ${err.message}`, "error");
+    }
+  }
+};
 
   return (
     <div className="p-4 flex flex-col gap-4 h-full">
@@ -164,7 +175,7 @@ export default function InstancesPage() {
               <div
                 key={`${instance.id || instance.name}-${viewMode}`}
                 onClick={() => setSelectedInstance(instance)}
-                onDoubleClick={() => handleLaunch()}
+                onDoubleClick={() => handleLaunch(instance)}
                 className="min-w-0 cursor-pointer active:scale-[0.99] transition-transform duration-150 will-change-transform"
                 style={{
                   animation: "fadeInUp 0.2s ease-out both",

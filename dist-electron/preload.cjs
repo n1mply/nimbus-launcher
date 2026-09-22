@@ -50,6 +50,7 @@ const instancesApiMethods = {
   install: (instanceId) => electron.ipcRenderer.invoke("instance:install", instanceId),
   cancelInstall: (instanceId) => electron.ipcRenderer.invoke("instance:cancel-install", instanceId),
   launch: (instanceId) => electron.ipcRenderer.invoke("instance:launch", instanceId),
+  stop: (instanceId) => electron.ipcRenderer.invoke("instance:stop", instanceId),
   // Слушатели событий загрузки
   onProgress: (callback) => {
     const sub = (_, data) => callback(data);

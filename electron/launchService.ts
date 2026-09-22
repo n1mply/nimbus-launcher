@@ -14,6 +14,28 @@ import { formatUuidWithDashes, getAccountCredentials } from "./auth";
 import { Titles } from "prismarine-auth";
 
 export class LaunchService {
+  private runningProcesses = new Map<string, ReturnType<typeof spawn>>();
+  private stoppingInstances = new Set<string>();
+
+  public isRunning(instanceId: string): boolean {
+    return this.runningProcesses.has(instanceId);
+  }
+
+  public stop(instanceId: string): boolean {
+    const proc = this.runningProcesses.get(instanceId);
+    if (!proc || proc.killed || !proc.pid) return false;
+
+    this.stoppingInstances.add(instanceId);
+    // На Windows обычный kill() не всегда убивает дерево процессов JVM,
+    // поэтому используем taskkill с /t (tree) /f (force)
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", String(proc.pid), "/f", "/t"]);
+    } else {
+      proc.kill("SIGTERM");
+    }
+    return true;
+  }
+
   private rulesAllow(rules?: any[]): boolean {
     if (!rules?.length) return true;
     const osName =
@@ -76,6 +98,8 @@ export class LaunchService {
     const AdmZip = (await import("adm-zip")).default;
 
     for (const lib of libs) {
+      if (!this.rulesAllow(lib.rules)) continue;
+
       const nativesKey: string | undefined = lib.natives?.[currentOs];
       if (!nativesKey) continue;
 
@@ -200,10 +224,15 @@ export class LaunchService {
     ]);
 
     // 3. Формирование Classpath
+    // 3. Формирование Classpath
     const classpathEntries: string[] = [];
     const seen = new Set<string>();
 
     for (const lib of versionData.libraries || []) {
+      // 1. СНАЧАЛА ПРОВЕРЯЕМ ПРАВИЛА ОС:
+      // Если библиотека не подходит для текущей ОС (например, Mac-библиотека на Windows) — пропускаем!
+      if (!this.rulesAllow(lib.rules)) continue;
+
       const key = lib.name
         ?.split(":")
         .filter((_: string, i: number) => i !== 2)
@@ -355,6 +384,8 @@ export class LaunchService {
       detached: false,
     });
 
+    this.runningProcesses.set(instanceId, gameProcess);
+
     gameProcess.stdout.on("data", (data) => {
       const msg = data.toString();
       console.log(`[MC STDOUT]: ${msg}`);
@@ -368,8 +399,11 @@ export class LaunchService {
     });
 
     gameProcess.on("exit", async (code) => {
+      this.runningProcesses.delete(instanceId);
+      const wasStoppedManually = this.stoppingInstances.delete(instanceId);
+
       console.log(`[Launcher] Game was closed with code: ${code}`);
-      if (code !== 0) {
+      if (code !== 0 && !wasStoppedManually) {
         await setInstanceStatus(instanceId, "crushed");
         win?.webContents.send("game:crashed", { instanceId, exitCode: code });
       } else {
@@ -384,5 +418,9 @@ export function registerLaunchHandlers(mainWindow: BrowserWindow): void {
   const launcher = new LaunchService();
   ipcMain.handle("instance:launch", async (_, instanceId: string) => {
     return await launcher.launch(instanceId, mainWindow);
+  });
+
+  ipcMain.handle("instance:stop", async (_, instanceId: string) => {
+    return launcher.stop(instanceId);
   });
 }

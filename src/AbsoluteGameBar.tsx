@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useAlert } from "./contexts/alertContext";
 import { Instance } from "./types";
-import { Play, Download, Loader2 } from "lucide-react";
+import { Play, Download, Loader2, Square } from "lucide-react";
 import GameBarMarquee from "./GameBarMarquee";
 import { MorphIcon } from "morphicons/react";
 import type { Status } from "./types";
-
 
 import {
   Folder,
@@ -129,7 +128,20 @@ export default function AbsoluteGameBar({
       }
 
       if (phase === "visible" || phase === "entering") {
+        const sameInstanceId =
+          displayedInstance &&
+          ((instance as any).id || instance.name) ===
+            ((displayedInstance as any).id || displayedInstance.name);
+
         setDisplayedInstance(instance);
+
+        if (
+          sameInstanceId &&
+          (status === "running" || status === "launching")
+        ) {
+          return;
+        }
+
         runInstalledCheck(instance);
         return;
       }
@@ -192,7 +204,6 @@ export default function AbsoluteGameBar({
 
   const isVisible = phase === "visible";
 
-  // Обработчик кнопки Play / Install
   async function handlePrimaryAction() {
     if (status === "not_installed") {
       setShowModal(true);
@@ -207,11 +218,24 @@ export default function AbsoluteGameBar({
       try {
         onPlay?.(displayedInstance);
         await window.instancesAPI.launch(instanceId);
-        // Не возвращаем статус назад сразу — игра запускается
+        setStatus("running");
       } catch (err: any) {
         console.error("Ошибка запуска:", err);
         showAlert(`Launching error: ${err.message}`, "error");
         setStatus("installed");
+      }
+      return;
+    }
+
+    if (status === "running") {
+      const instanceId =
+        (displayedInstance as any).id || displayedInstance.name;
+      try {
+        await window.instancesAPI.stop(instanceId);
+        // статус вернётся в "installed" через событие game:closed
+      } catch (err: any) {
+        console.error("Ошибка остановки:", err);
+        showAlert(`Stop error: ${err.message}`, "error");
       }
     }
   }
@@ -259,20 +283,18 @@ export default function AbsoluteGameBar({
           {/* Главная кнопка: Play / Install / Launching */}
           <button
             type="button"
-            disabled={
-              status === "loading" ||
-              status === "launching" ||
-              status === "error"
-            }
+            disabled={status === "loading" || status === "error"}
             onClick={handlePrimaryAction}
             className={`backface-visibility-hidden will-change-transform flex w-36 items-center justify-center gap-2 rounded-full py-2.5 text-[14px] font-semibold transition-colors duration-150 cursor-pointer active:scale-95 ${
               status === "installed"
                 ? "border border-blue-400/30 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/10"
                 : status === "not_installed"
                   ? "border border-blue-400/30 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400/50"
-                  : status === "launching"
-                    ? "border border-amber-400/30 bg-amber-500/20 text-amber-300 cursor-wait"
-                    : "border border-white/5 bg-white/5 text-gray-500 cursor-not-allowed opacity-60"
+                  : status === "running"
+                    ? "border border-red-400/30 bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:border-red-400/50 hover:shadow-lg hover:shadow-red-500/10"
+                    : status === "launching"
+                      ? "border border-amber-400/30 bg-amber-500/20 text-amber-300 cursor-wait"
+                      : "border border-white/5 bg-white/5 text-gray-500 cursor-not-allowed opacity-60"
             }`}
           >
             {(status === "loading" || status === "launching") && (
@@ -283,11 +305,16 @@ export default function AbsoluteGameBar({
               <Play size={18} className="fill-current" />
             )}
 
+            {status === "running" && (
+              <Square size={16} className="fill-current" />
+            )}
+
             {status === "not_installed" && <Download size={18} />}
 
             <span>
               {status === "loading" && "Checking..."}
               {status === "installed" && "Play"}
+              {status === "running" && "Stop"}
               {status === "launching" && "Launching..."}
               {status === "not_installed" && "Install"}
               {status === "error" && "Unavailable"}

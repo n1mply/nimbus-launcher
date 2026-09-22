@@ -73,4 +73,5 @@ export type Status =
   | "installed"
   | "not_installed"
   | "launching"
+  | "running"
   | "error";
