@@ -46,11 +46,12 @@ const instancesApiMethods = {
   create: (payload) => electron.ipcRenderer.invoke("instances:create", payload),
   getAll: () => electron.ipcRenderer.invoke("instances:getAll"),
   checkInstalled: (instanceId) => electron.ipcRenderer.invoke("instances:checkInstalled", instanceId),
-  // Установка и запуск
+  // Установка, запуск и остановка
   install: (instanceId) => electron.ipcRenderer.invoke("instance:install", instanceId),
   cancelInstall: (instanceId) => electron.ipcRenderer.invoke("instance:cancel-install", instanceId),
   launch: (instanceId) => electron.ipcRenderer.invoke("instance:launch", instanceId),
   stop: (instanceId) => electron.ipcRenderer.invoke("instance:stop", instanceId),
+  getRunning: () => electron.ipcRenderer.invoke("instances:getRunning"),
   // Слушатели событий загрузки
   onProgress: (callback) => {
     const sub = (_, data) => callback(data);

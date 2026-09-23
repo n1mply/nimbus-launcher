@@ -9,6 +9,8 @@ import AbsoluteGameBar from "../AbsoluteGameBar";
 import { useAlert } from "../contexts/alertContext";
 import type { Status } from "../types";
 
+const getInstanceId = (instance: Instance) => instance.id || instance.name;
+
 export default function InstancesPage() {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -21,7 +23,11 @@ export default function InstancesPage() {
   );
 
   const { showAlert } = useAlert();
-  const [status, setStatus] = useState<Status>("loading");
+  const [statuses, setStatuses] = useState<Record<string, Status>>({});
+
+  const updateStatus = useCallback((instanceId: string, status: Status) => {
+    setStatuses((prev) => ({ ...prev, [instanceId]: status }));
+  }, []);
 
   const loadInstances = useCallback(async () => {
     try {
@@ -39,6 +45,45 @@ export default function InstancesPage() {
     loadInstances();
   }, [loadInstances]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const runningIds: string[] = await window.instancesAPI.getRunning();
+        if (runningIds.length) {
+          setStatuses((prev) => {
+            const next = { ...prev };
+            for (const id of runningIds) next[id] = "running";
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch running instances:", err);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const unsubClosed = window.instancesAPI.onGameClosed?.((data: any) => {
+      updateStatus(data.instanceId, "installed");
+      const inst = instances.find((i) => getInstanceId(i) === data.instanceId);
+      showAlert(`${inst?.name ?? data.instanceId}: game was closed`, "default");
+    });
+
+    const unsubCrashed = window.instancesAPI.onGameCrashed?.((data: any) => {
+      updateStatus(data.instanceId, "installed");
+      const inst = instances.find((i) => getInstanceId(i) === data.instanceId);
+      showAlert(
+        `${inst?.name ?? data.instanceId}: game crashed (code ${data.exitCode})`,
+        "error",
+      );
+    });
+
+    return () => {
+      unsubClosed?.();
+      unsubCrashed?.();
+    };
+  }, [instances, updateStatus, showAlert]);
+
   const filteredInstances = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return instances;
@@ -51,33 +96,74 @@ export default function InstancesPage() {
   const hasNoSearchResults =
     !hasNoInstancesAtAll && !isLoading && filteredInstances.length === 0;
 
-  const handleLaunch = async (targetInstance: Instance) => {
-  const instanceId = targetInstance.id || targetInstance.name;
+  const handleLaunch = useCallback(
+    async (target: Instance) => {
+      const instanceId = getInstanceId(target);
+      let currentStatus = statuses[instanceId];
 
-  if (status === "installed") {
-    setStatus("launching");
-    try {
-      await window.instancesAPI.launch(instanceId);
-      setStatus("running");
-    } catch (err: any) {
-      console.error("Ошибка запуска:", err);
-      showAlert(`Launching error: ${err.message}`, "error");
-      setStatus("installed");
-    }
-    return;
-  }
+      if (currentStatus === "loading" || currentStatus === "launching") {
+        return;
+      }
 
-  if (status === "running") {
-    try {
-      await window.instancesAPI.stop(instanceId);
-      // статус вернётся в "installed" через событие game:closed,
-      // которое слушает AbsoluteGameBar
-    } catch (err: any) {
-      console.error("Ошибка остановки:", err);
-      showAlert(`Stop error: ${err.message}`, "error");
-    }
-  }
-};
+      if (currentStatus === undefined || currentStatus === "error") {
+        updateStatus(instanceId, "loading");
+        try {
+          const isInstalled =
+            await window.instancesAPI.checkInstalled(instanceId);
+          currentStatus = isInstalled ? "installed" : "not_installed";
+          updateStatus(instanceId, currentStatus);
+        } catch (err) {
+          updateStatus(instanceId, "error");
+          return;
+        }
+      }
+
+      if (currentStatus === "running") {
+        try {
+          await window.instancesAPI.stop(instanceId);
+        } catch (err: any) {
+          showAlert(`Stop error (${target.name}): ${err.message}`, "error");
+        }
+        return;
+      }
+
+      if (currentStatus === "installed") {
+        updateStatus(instanceId, "launching");
+        try {
+          await window.instancesAPI.launch(instanceId);
+          updateStatus(instanceId, "running");
+        } catch (err: any) {
+          console.error("Ошибка запуска:", err);
+          showAlert(
+            `Launching error (${target.name}): ${err.message}`,
+            "error",
+          );
+          updateStatus(instanceId, "installed");
+        }
+        return;
+      }
+
+      if (currentStatus === "not_installed") {
+        showAlert(
+          `${target.name} is not installed yet — open its panel to install`,
+          "default",
+        );
+      }
+    },
+    [statuses, updateStatus, showAlert],
+  );
+
+  const selectedId = selectedInstance ? getInstanceId(selectedInstance) : null;
+  const selectedStatus: Status =
+    (selectedId ? statuses[selectedId] : undefined) ?? "loading";
+
+  const setSelectedStatus = useCallback(
+    (status: Status) => {
+      if (!selectedId) return;
+      updateStatus(selectedId, status);
+    },
+    [selectedId, updateStatus],
+  );
 
   return (
     <div className="p-4 flex flex-col gap-4 h-full">
@@ -141,7 +227,6 @@ export default function InstancesPage() {
       {/* Контентная область */}
       <div className="flex-1 min-h-0">
         {isLoading ? (
-          /* Лоадер при первичном поиске / загрузке */
           <div className="flex flex-col items-center justify-center h-full gap-3 mb-10 text-center text-gray-500">
             <Loader2 size={32} className="animate-spin text-blue-400" />
             <p className="text-[14px]">Loading your instances...</p>
@@ -196,8 +281,8 @@ export default function InstancesPage() {
       />
       <AbsoluteGameBar
         instance={selectedInstance}
-        status={status}
-        setStatus={setStatus}
+        status={selectedStatus}
+        setStatus={setSelectedStatus}
         onClose={() => setSelectedInstance(null)}
       />
     </div>

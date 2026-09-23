@@ -57,7 +57,7 @@ const instancesApiMethods = {
   checkInstalled: (instanceId: string) =>
     ipcRenderer.invoke("instances:checkInstalled", instanceId),
 
-  // Установка и запуск
+  // Установка, запуск и остановка
   install: (instanceId: string) =>
     ipcRenderer.invoke("instance:install", instanceId),
   cancelInstall: (instanceId: string) =>
@@ -65,6 +65,7 @@ const instancesApiMethods = {
   launch: (instanceId: string) =>
     ipcRenderer.invoke("instance:launch", instanceId),
   stop: (instanceId: string) => ipcRenderer.invoke("instance:stop", instanceId),
+  getRunning: () => ipcRenderer.invoke("instances:getRunning"),
 
   // Слушатели событий загрузки
   onProgress: (callback: (data: any) => void) => {

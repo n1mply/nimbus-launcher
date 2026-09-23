@@ -21,6 +21,10 @@ export class LaunchService {
     return this.runningProcesses.has(instanceId);
   }
 
+  public getRunningIds(): string[] {
+    return Array.from(this.runningProcesses.keys());
+  }
+
   public stop(instanceId: string): boolean {
     const proc = this.runningProcesses.get(instanceId);
     if (!proc || proc.killed || !proc.pid) return false;
@@ -416,11 +420,16 @@ export class LaunchService {
 
 export function registerLaunchHandlers(mainWindow: BrowserWindow): void {
   const launcher = new LaunchService();
+
   ipcMain.handle("instance:launch", async (_, instanceId: string) => {
     return await launcher.launch(instanceId, mainWindow);
   });
 
   ipcMain.handle("instance:stop", async (_, instanceId: string) => {
     return launcher.stop(instanceId);
+  });
+
+  ipcMain.handle("instances:getRunning", () => {
+    return launcher.getRunningIds();
   });
 }
