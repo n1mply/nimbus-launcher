@@ -183,6 +183,10 @@ export default function InstallationModal({ isOpen, instance, onClose, onSuccess
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
         onConfirm={handleConfirmCancel}
+        warningText="Are you sure you want to cancel the instance installation? If you cancel now, downloaded files for this session will be cleaned up and you will have to download everything again later."
+        yesText="No, continue"
+        noText="Yes, cancel"
+        title="Cancel installation?"
       />
     </>
   );

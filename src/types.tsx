@@ -27,7 +27,7 @@ export type Cape = {
 };
 
 export type Instance = {
-  id?: string;
+  id: string;
   name: string;
   modloader: ModloaderType;
   minecraftVersion: string;
@@ -35,6 +35,7 @@ export type Instance = {
   launchVersionId?: string | null;
   instanceIconPath?: string;
   status?: InstanceStatus;
+  launchSettings?: LaunchSettings;
 };
 
 export type VersionType = "release" | "snapshot";
@@ -75,3 +76,15 @@ export type Status =
   | "launching"
   | "running"
   | "error";
+
+export interface LaunchSettings {
+  memory?: {
+    minMb: number;
+    maxMb: number;
+  };
+  java?: {
+    mode: "auto" | "custom";
+    path?: string;
+  };
+  jvmArgs?: string;
+}

@@ -54,7 +54,8 @@ function createWindow(): void {
 
   // Регистрируем сервисы, требующие ссылку на окно для отправки IPC-событий в UI
   registerDownloadActions(win);
-  registerLaunchHandlers(win);
+  const launcher = registerLaunchHandlers(win);
+  registerInstanceHandlers((id) => launcher.isRunning(id));
 
   ipcMain.on(
     "window-control",
@@ -129,7 +130,6 @@ app.whenReady().then(() => {
   registerSkinsHandlers();
   registerCapesHandlers();
   registerVersionsHandlers();
-  registerInstanceHandlers();
   registerFolderHandlers();
 
   createWindow();

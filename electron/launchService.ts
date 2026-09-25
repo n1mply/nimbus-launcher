@@ -12,6 +12,8 @@ import {
 import { JavaService } from "./javaService";
 import { formatUuidWithDashes, getAccountCredentials } from "./auth";
 import { Titles } from "prismarine-auth";
+import { parse as parseShellArgs } from "shell-quote";
+import type { Instance } from "../src/types";
 
 export class LaunchService {
   private runningProcesses = new Map<string, ReturnType<typeof spawn>>();
@@ -182,6 +184,16 @@ export class LaunchService {
       },
     };
   }
+  private resolveLaunchConfig(instance: Instance) {
+    const s = instance.launchSettings;
+    const memory = s?.memory ?? { minMb: 512, maxMb: 3072 };
+    const extraJvmArgs = s?.jvmArgs
+      ? (parseShellArgs(s.jvmArgs) as unknown[]).filter(
+          (t): t is string => typeof t === "string",
+        )
+      : [];
+    return { memory, window: s?.window, extraJvmArgs, java: s?.java };
+  }
 
   public async launch(instanceId: string, win?: BrowserWindow): Promise<void> {
     const t0 = performance.now();
@@ -190,6 +202,7 @@ export class LaunchService {
     );
 
     const instance = await readInstance(instanceId);
+    const launchConfig = this.resolveLaunchConfig(instance);
     const mcDir = getMinecraftDir(instanceId);
     const versionsDir = path.join(mcDir, "versions");
     const librariesDir = path.join(mcDir, "libraries");
@@ -221,13 +234,16 @@ export class LaunchService {
       versionData,
     );
 
-    // 2. Быстрое получение Java и токена аккаунта
+    const javaPathPromise =
+      launchConfig.java?.mode === "custom" && launchConfig.java.path
+        ? Promise.resolve(launchConfig.java.path)
+        : this.javaService.ensureJava(javaMajor);
+
     const [javaPath, credentials] = await Promise.all([
-      this.javaService.ensureJava(javaMajor),
+      javaPathPromise,
       getAccountCredentials(),
     ]);
 
-    // 3. Формирование Classpath
     // 3. Формирование Classpath
     const classpathEntries: string[] = [];
     const seen = new Set<string>();
@@ -304,8 +320,8 @@ export class LaunchService {
     );
 
     const jvmArgs = [
-      "-Xms512M",
-      "-Xmx3G",
+      `-Xms${launchConfig.memory.minMb}M`,
+      `-Xmx${launchConfig.memory.maxMb}M`,
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseG1GC",
       "-XX:G1NewSizePercent=20",
@@ -319,6 +335,7 @@ export class LaunchService {
 
       ...(profileJvm.length ? profileJvm : legacyJvm),
       ...(hasClasspath ? [] : ["-cp", fullClasspath]),
+      ...launchConfig.extraJvmArgs,
 
       versionData.mainClass,
     ];
@@ -418,7 +435,9 @@ export class LaunchService {
   }
 }
 
-export function registerLaunchHandlers(mainWindow: BrowserWindow): void {
+export function registerLaunchHandlers(
+  mainWindow: BrowserWindow,
+): LaunchService {
   const launcher = new LaunchService();
 
   ipcMain.handle("instance:launch", async (_, instanceId: string) => {
@@ -432,4 +451,6 @@ export function registerLaunchHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("instances:getRunning", () => {
     return launcher.getRunningIds();
   });
+
+  return launcher;
 }

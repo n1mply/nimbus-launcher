@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, ipcMain } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -111,6 +111,53 @@ export class JavaService {
     return path.join(binFolder, "bin", "java");
   }
 
+  public async validateJavaPath(
+    executablePath: string,
+  ): Promise<{
+    ok: boolean;
+    version?: string;
+    majorVersion?: number;
+    error?: string;
+  }> {
+    if (!fs.existsSync(executablePath)) {
+      return { ok: false, error: "File not found" };
+    }
+
+    return new Promise((resolve) => {
+      const proc = spawn(executablePath, ["-version"]);
+      let output = "";
+
+      const timeout = setTimeout(() => {
+        proc.kill();
+        resolve({ ok: false, error: "Timed out" });
+      }, 5000);
+
+      proc.stderr.on("data", (d) => (output += d.toString()));
+      proc.stdout.on("data", (d) => (output += d.toString()));
+
+      proc.on("close", () => {
+        clearTimeout(timeout);
+        const match = output.match(/version\s+"([^"]+)"/i);
+        if (!match) {
+          resolve({ ok: false, error: "Could not determine Java version" });
+          return;
+        }
+        const version = match[1];
+        const majorMatch = version.match(/^(?:1\.)?(\d+)/);
+        resolve({
+          ok: true,
+          version,
+          majorVersion: majorMatch ? parseInt(majorMatch[1], 10) : undefined,
+        });
+      });
+
+      proc.on("error", (err) => {
+        clearTimeout(timeout);
+        resolve({ ok: false, error: err.message });
+      });
+    });
+  }
+
   /**
    * Гарантирует наличие ТОЧНОЙ мажорной версии Java
    */
@@ -211,4 +258,11 @@ export class JavaService {
     );
     return finalExec;
   }
+}
+
+export function registerJavaHandlers(): void {
+  const javaService = new JavaService();
+  ipcMain.handle("java:validate", async (_, execPath: string) => {
+    return await javaService.validateJavaPath(execPath);
+  });
 }

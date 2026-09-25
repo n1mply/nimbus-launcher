@@ -2,19 +2,32 @@
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.15);
   border-radius: 999px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.3);
+  /* прозрачная рамка «отжимает» фон внутрь, чтобы скругление было видно */
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-/* На случай если где-то рендерится не в Chromium (на будущее, для консистентности) */
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  background-clip: padding-box;
+}
+
+/* угол между вертикальным и горизонтальным скроллом */
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox + будущие браузеры */
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;

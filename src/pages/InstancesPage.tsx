@@ -42,6 +42,18 @@ export default function InstancesPage() {
   }, []);
 
   useEffect(() => {
+    const loadInstances = async () => {
+      const list = await window.instancesAPI.getAll();
+      setInstances(list);
+    };
+
+    loadInstances();
+    
+    window.addEventListener("instances:updated", loadInstances);
+    return () => window.removeEventListener("instances:updated", loadInstances);
+  }, []);
+
+  useEffect(() => {
     loadInstances();
   }, [loadInstances]);
 

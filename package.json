@@ -20,6 +20,7 @@
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "shell-quote": "^1.10.0",
     "skinview3d": "^3.4.2",
     "skinview3d-blockbench": "^1.0.19",
     "tailwindcss": "^4.3.3",

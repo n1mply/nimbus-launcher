@@ -52,6 +52,10 @@ const instancesApiMethods = {
   launch: (instanceId) => electron.ipcRenderer.invoke("instance:launch", instanceId),
   stop: (instanceId) => electron.ipcRenderer.invoke("instance:stop", instanceId),
   getRunning: () => electron.ipcRenderer.invoke("instances:getRunning"),
+  // Изменение сборки
+  rename: (instanceId, newName) => electron.ipcRenderer.invoke("instances:rename", instanceId, newName),
+  updateSettings: (instanceId, patch) => electron.ipcRenderer.invoke("instances:updateSettings", instanceId, patch),
+  setLoaderVersion: (instanceId, version) => electron.ipcRenderer.invoke("instances:setLoaderVersion", instanceId, version),
   // Слушатели событий загрузки
   onProgress: (callback) => {
     const sub = (_, data) => callback(data);
@@ -90,4 +94,14 @@ electron.contextBridge.exposeInMainWorld("instanceAPI", instancesApiMethods);
 electron.contextBridge.exposeInMainWorld("folderAPI", {
   openInstanceFolder: (folderName) => electron.ipcRenderer.invoke("folder:openInstanceFolder", folderName),
   deleteInstanceFolder: (folderName, mode) => electron.ipcRenderer.invoke("folder:deleteInstanceFolder", { folderName, mode })
+});
+electron.contextBridge.exposeInMainWorld("systemAPI", {
+  getTotalMemoryMb: () => electron.ipcRenderer.invoke("system:getTotalMemoryMb")
+});
+electron.contextBridge.exposeInMainWorld("javaAPI", {
+  validate: (execPath) => electron.ipcRenderer.invoke("java:validate", execPath),
+  pickExecutable: () => electron.ipcRenderer.invoke("java:pickExecutable")
+});
+electron.contextBridge.exposeInMainWorld("webUtilsAPI", {
+  getPathForFile: (file) => electron.webUtils.getPathForFile(file)
 });

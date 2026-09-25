@@ -1,5 +1,7 @@
 console.log(">>> PRELOAD STARTED");
 import { ipcRenderer, contextBridge } from "electron";
+import { UpdateInstanceSettingsPayload } from "./instances";
+import { webUtils } from "electron";
 
 // --------- Базовый транспорт IPC ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -67,6 +69,14 @@ const instancesApiMethods = {
   stop: (instanceId: string) => ipcRenderer.invoke("instance:stop", instanceId),
   getRunning: () => ipcRenderer.invoke("instances:getRunning"),
 
+  // Изменение сборки
+  rename: (instanceId: string, newName: string) =>
+    ipcRenderer.invoke("instances:rename", instanceId, newName),
+  updateSettings: (instanceId: string, patch: UpdateInstanceSettingsPayload) =>
+    ipcRenderer.invoke("instances:updateSettings", instanceId, patch),
+  setLoaderVersion: (instanceId: string, version: string) =>
+    ipcRenderer.invoke("instances:setLoaderVersion", instanceId, version),
+
   // Слушатели событий загрузки
   onProgress: (callback: (data: any) => void) => {
     const sub = (_: any, data: any) => callback(data);
@@ -110,7 +120,6 @@ const instancesApiMethods = {
   },
 };
 
-// Экспортируем в window под обоими именами (с 's' и без)
 contextBridge.exposeInMainWorld("instancesAPI", instancesApiMethods);
 contextBridge.exposeInMainWorld("instanceAPI", instancesApiMethods);
 
@@ -120,4 +129,17 @@ contextBridge.exposeInMainWorld("folderAPI", {
 
   deleteInstanceFolder: (folderName: string, mode: "soft" | "hard") =>
     ipcRenderer.invoke("folder:deleteInstanceFolder", { folderName, mode }),
+});
+
+contextBridge.exposeInMainWorld("systemAPI", {
+  getTotalMemoryMb: () => ipcRenderer.invoke("system:getTotalMemoryMb"),
+});
+
+contextBridge.exposeInMainWorld("javaAPI", {
+  validate: (execPath: string) => ipcRenderer.invoke("java:validate", execPath),
+  pickExecutable: () => ipcRenderer.invoke("java:pickExecutable"),
+});
+
+contextBridge.exposeInMainWorld("webUtilsAPI", {
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });
