@@ -6,7 +6,7 @@ type Props = {
   activeTab: TabId
   onSelect: (tab: TabId) => void
 }
-// bg-[#1E2029]/90
+
 export default function Sidebar({ activeTab, onSelect }: Props) {
   return (
     <nav className='bg-gradient-to-b from-[#1E2029] to-[#14151C] backdrop-blur-sm w-[20%] shadow-2xl shadow-black/40 h-full rounded-xl border border-white/5 flex justify-between flex-col p-2'>

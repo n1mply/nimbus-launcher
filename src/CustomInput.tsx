@@ -84,7 +84,7 @@ export default function CustomInput({
 
             {isOpen && (
                 <div
-                    className={`absolute z-10 w-full overflow-hidden rounded-xl border border-white/5 bg-[#1A1B23] shadow-xl shadow-black/40 ${
+                    className={`absolute z-50 w-full overflow-hidden rounded-xl border border-white/5 bg-[#1A1B23] shadow-xl shadow-black/40 ${
                         isListGoingUp ? "bottom-full mb-1.5" : "top-full mt-1.5"
                     }`}
                 >

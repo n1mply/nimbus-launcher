@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
@@ -10,7 +11,8 @@ import {
   XCircle,
   FolderOpen,
   Cpu,
-  Monitor,
+  ShieldCheck,
+  FileText,
 } from "lucide-react";
 
 import CustomModal from "./CustomModal";
@@ -41,8 +43,6 @@ const RAM_STEP = 256;
 const RAM_FLOOR = 512;
 const DEFAULT_MIN_MB = 512;
 const DEFAULT_MAX_MB = 3072;
-const DEFAULT_W = 854;
-const DEFAULT_H = 480;
 
 const inputCls =
   "w-full rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[13px] text-white placeholder:text-gray-500 outline-none transition-colors focus:border-blue-400/30 disabled:opacity-50";
@@ -78,8 +78,6 @@ async function invokeIPC<T = any>(channel: string, ...args: any[]): Promise<T> {
   }
   throw new Error(`IPC bridge is not found for channel: ${channel}`);
 }
-
-/* ───────────────────────── small components ───────────────────────── */
 
 function Field({
   label,
@@ -129,41 +127,6 @@ function Section({
       </div>
       <div className="flex flex-col gap-4">{children}</div>
     </section>
-  );
-}
-
-function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex items-center gap-3 text-[13px] text-gray-300 cursor-pointer select-none"
-    >
-      <span
-        className={`relative h-5 w-9 rounded-full border transition-colors ${
-          checked
-            ? "border-blue-400/30 bg-blue-500/30"
-            : "border-white/10 bg-white/5"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all ${
-            checked ? "left-[18px] bg-blue-300" : "left-0.5 bg-gray-400"
-          }`}
-        />
-      </span>
-      {label}
-    </button>
   );
 }
 
@@ -253,8 +216,6 @@ function RamRange({
     </div>
   );
 }
-
-/* ───────────────────────── Основной компонент ───────────────────────── */
 
 export default function InstanceSettingsModal({
   isOpen = true,
@@ -363,6 +324,67 @@ export default function InstanceSettingsModal({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [verifying, setVerifying] = useState(false);
+  const [verifyStatusText, setVerifyStatusText] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifyDone, setVerifyDone] = useState(false);
+  const verifyDoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const [logError, setLogError] = useState<string | null>(null);
+
+  const handleOpenLatestLog = async () => {
+    setLogError(null);
+    try {
+      const res = await invokeIPC<{ success: boolean; error?: string }>(
+        "folder:openLatestLog",
+        instance.id, // id === имя папки
+      );
+      if (!res.success) setLogError(res.error || "Failed to open the log file");
+    } catch (e: any) {
+      setLogError(e.message || "Failed to open the log file");
+    }
+  };
+
+  const flashVerifyDone = () => {
+    if (verifyDoneTimeoutRef.current)
+      clearTimeout(verifyDoneTimeoutRef.current);
+    setVerifyDone(true);
+    verifyDoneTimeoutRef.current = setTimeout(() => {
+      setVerifyDone(false);
+      verifyDoneTimeoutRef.current = null;
+    }, 3000);
+  };
+
+  const trackInstall = (
+    onStatus: (text: string) => void,
+    onDone: (ok: boolean, err?: string) => void,
+  ) => {
+    const api = (window as any).instancesAPI;
+    const offProgress = api?.onProgress?.((d: any) => {
+      if (d.instanceId === instance.id) onStatus(d.statusText || "");
+    });
+    const offComplete = api?.onComplete?.((d: any) => {
+      if (d.instanceId === instance.id) {
+        cleanup();
+        onDone(true);
+      }
+    });
+    const offError = api?.onError?.((d: any) => {
+      if (d.instanceId === instance.id) {
+        cleanup();
+        onDone(false, d.error);
+      }
+    });
+    const cleanup = () => {
+      offProgress?.();
+      offComplete?.();
+      offError?.();
+    };
+    return cleanup;
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     setName(initial.name);
@@ -376,7 +398,24 @@ export default function InstanceSettingsModal({
     setJavaCheck({ state: "idle" });
     setJvmArgs(initial.jvmArgs);
     setSaveError(null);
+    if (verifyDoneTimeoutRef.current) {
+      clearTimeout(verifyDoneTimeoutRef.current);
+      verifyDoneTimeoutRef.current = null;
+    }
+    setVerifying(false);
+    setVerifyStatusText(null);
+    setVerifyError(null);
+    setVerifyDone(false);
+    setLogError(null)
   }, [isOpen, instance.id, initial]);
+
+  useEffect(
+    () => () => {
+      if (verifyDoneTimeoutRef.current)
+        clearTimeout(verifyDoneTimeoutRef.current);
+    },
+    [],
+  );
 
   useEffect(
     () => () => {
@@ -440,6 +479,24 @@ export default function InstanceSettingsModal({
     }
   };
 
+  const handleVerifyIntegrity = async () => {
+    setVerifying(true);
+    setVerifyError(null);
+    setVerifyDone(false);
+    const cleanup = trackInstall(setVerifyStatusText, (ok, err) => {
+      setVerifying(false);
+      if (ok) flashVerifyDone();
+      else setVerifyError(err || "Verification failed");
+    });
+    try {
+      await invokeIPC("instance:install", instance.id);
+    } catch (e: any) {
+      cleanup();
+      setVerifying(false);
+      setVerifyError(e.message || "Verification failed");
+    }
+  };
+
   const handleApplyLoader = async () => {
     if (!loaderSel || loaderSel === instance.modloaderVersion) return;
     setApplyingLoader(true);
@@ -450,13 +507,23 @@ export default function InstanceSettingsModal({
         data?: Instance;
         error?: string;
       }>("instances:setLoaderVersion", instance.id, loaderSel);
-      if (res.success && res.data) {
-        onUpdated?.(res.data);
-      } else {
+      if (!res.success || !res.data) {
         setSaveError(res.error || "Failed to update loader version");
+        return;
       }
+      onUpdated?.(res.data);
+
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = trackInstall(setVerifyStatusText, (ok, err) =>
+          ok ? resolve() : reject(new Error(err)),
+        );
+        invokeIPC("instance:install", instance.id).catch((e) => {
+          cleanup();
+          reject(e);
+        });
+      });
     } catch (e: any) {
-      setSaveError(e.message || "Failed to update loader version");
+      setSaveError(e.message || "Failed to install the new loader version");
     } finally {
       setApplyingLoader(false);
     }
@@ -498,7 +565,7 @@ export default function InstanceSettingsModal({
       } else {
         setSaveError(res.error || "Failed to save settings");
       }
-      showAlert(`${instance.name}'s settings was saved!`, 'default')
+      showAlert(`${instance.name}'s settings was saved!`, "default");
     } catch (err: any) {
       setSaveError(err.message || "Save error");
     } finally {
@@ -517,7 +584,7 @@ export default function InstanceSettingsModal({
           mode: "hard",
         },
       );
-      showAlert(`${instance.name} was successfully deleted!`, 'default')
+      showAlert(`${instance.name} was successfully deleted!`, "default");
 
       if (res.success) {
         setConfirmDelete(false);
@@ -535,12 +602,11 @@ export default function InstanceSettingsModal({
     }
   };
 
-  const sizeOk = (v: number) => Number.isFinite(v) && v >= 320 && v <= 7680;
   const valid =
     name.trim().length > 0 &&
     minMb <= maxMb &&
     (javaMode === "auto" ||
-      (javaPath.trim().length > 0 && javaCheck.state !== "error"))
+      (javaPath.trim().length > 0 && javaCheck.state !== "error"));
 
   const isDirty = useMemo(() => {
     return (
@@ -552,17 +618,9 @@ export default function InstanceSettingsModal({
       (javaMode === "custom" && javaPath.trim() !== initial.javaPath) ||
       jvmArgs !== initial.jvmArgs
     );
-  }, [
-    name,
-    initial,
-    iconDiskPath,
-    minMb,
-    maxMb,
-    javaMode,
-    javaPath,
-    jvmArgs,
-  ]);
+  }, [name, initial, iconDiskPath, minMb, maxMb, javaMode, javaPath, jvmArgs]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const versionsToDisplay =
     internalVersions.length > 0
       ? internalVersions
@@ -684,7 +742,6 @@ export default function InstanceSettingsModal({
                         internalVersionsLoading ||
                         isBusy
                       }
-                      /* py-2.5 добавлен для того, чтобы высота кнопки совпала с CustomInput */
                       className={`${accentBtnCls} shrink-0 py-2.5`}
                     >
                       {(applyingLoader || internalVersionsLoading) && (
@@ -810,6 +867,63 @@ export default function InstanceSettingsModal({
                   className={`${inputCls} resize-none font-mono text-[12px]`}
                 />
               </Field>
+            </Section>
+            <Section
+              icon={<FileText size={15} />}
+              title="Logs"
+              description="Open the most recent game session log — useful when reporting a crash or checking what happened on the last launch."
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleOpenLatestLog}
+                  className={secondaryBtnCls}
+                >
+                  Open latest.log
+                </button>
+                {logError && (
+                  <span className="text-[12px] text-red-400">{logError}</span>
+                )}
+              </div>
+            </Section>
+            <Section
+              icon={<ShieldCheck size={15} />}
+              title="Maintenance"
+              description="Checks libraries, assets and the version manifest against official metadata: downloads anything missing and removes leftovers from previous loader versions."
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleVerifyIntegrity}
+                  disabled={isBusy || verifying}
+                  className={secondaryBtnCls}
+                >
+                  {verifying ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <></>
+                  )}
+                  {verifying
+                    ? verifyStatusText || "Verifying..."
+                    : "Verify integrity"}
+                </button>
+                {verifyError && (
+                  <span className="text-[12px] text-red-400">
+                    {verifyError}
+                  </span>
+                )}
+                {verifyDone && !verifying && (
+                  <span className="flex items-center gap-1.5 text-[12px] text-green-400">
+                    <CheckCircle2 size={14} /> Up to date
+                  </span>
+                )}
+              </div>
+              <p className="text-[12px] leading-relaxed text-gray-500">
+                Run this if the game won't launch, crashes on startup, or if
+                files were changed or deleted manually. Not needed after every
+                regular launch. Mods, worlds, resource packs, shaders and
+                configs are never touched.
+              </p>
             </Section>
           </div>
 

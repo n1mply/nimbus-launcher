@@ -129,6 +129,9 @@ contextBridge.exposeInMainWorld("folderAPI", {
 
   deleteInstanceFolder: (folderName: string, mode: "soft" | "hard") =>
     ipcRenderer.invoke("folder:deleteInstanceFolder", { folderName, mode }),
+
+  openLatestLog: (folderName: string) =>
+    ipcRenderer.invoke("folder:openLatestLog", folderName),
 });
 
 contextBridge.exposeInMainWorld("systemAPI", {

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import { DownloadTask, IntegrityResult } from "../src/types";
 import { DownloadManager } from "./downloadManager";
+import { loadMergedVersion } from "./versionUtils";
 
 const MOJANG_MANIFEST_URL =
   "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -19,6 +20,12 @@ const PROFILE_LOADERS: Record<string, { metaBase: string; idPrefix: string }> =
       idPrefix: "quilt-loader",
     },
   };
+
+export interface PruneResult {
+  removedFiles: number;
+  removedDirs: number;
+  freedBytes: number;
+}
 
 export class IntegrityService {
   private dm: DownloadManager;
@@ -73,7 +80,7 @@ export class IntegrityService {
     const versionMeta = manifest.versions.find((v: any) => v.id === versionId);
     if (!versionMeta)
       throw new Error(
-        `Версия Minecraft ${versionId} не найдена в манифесте Mojang`,
+        `Minecraft version ${versionId} not found in Mojang manifest`,
       );
 
     const versionJsonRes = await fetch(versionMeta.url);
@@ -102,7 +109,7 @@ export class IntegrityService {
 
     const list: any[] = await res.json();
     if (!Array.isArray(list) || list.length === 0) {
-      throw new Error(`Загрузчик не поддерживает Minecraft ${mcVersion}`);
+      throw new Error(`Loader does not support Minecraft ${mcVersion}`);
     }
     // у Fabric есть флаг stable, у Quilt его нет — берём просто первый (самый новый)
     return (list.find((e) => e.loader?.stable) ?? list[0]).loader.version;
@@ -256,7 +263,7 @@ export class IntegrityService {
       );
       if (!profileRes.ok) {
         throw new Error(
-          `Не удалось получить профиль ${modloader} (HTTP ${profileRes.status})`,
+          `Failed to fetch ${modloader} profile (HTTP ${profileRes.status})`,
         );
       }
       const profileJson = await profileRes.json();
@@ -297,7 +304,7 @@ export class IntegrityService {
       (sum, item) => sum + (item.size || 0),
       0,
     );
-    
+
     if (modloader === "forge" || modloader === "neoforge")
       launchVersionId = null;
 
@@ -325,5 +332,165 @@ export class IntegrityService {
       }
     }
     return allowed;
+  }
+
+  private async dirSize(dir: string): Promise<number> {
+    let total = 0;
+    try {
+      const entries = await fsp.readdir(dir, { withFileTypes: true });
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        total += e.isDirectory()
+          ? await this.dirSize(full)
+          : (await fsp.stat(full)).size;
+      }
+    } catch {}
+    return total;
+  }
+
+  /* Удаляет файлы вне keep-набора, затем убирает опустевшие подпапки */
+  private async pruneDirRecursive(
+    dir: string,
+    keep: Set<string>,
+  ): Promise<{ removedFiles: number; freedBytes: number }> {
+    let removedFiles = 0;
+    let freedBytes = 0;
+
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const sub = await this.pruneDirRecursive(full, keep);
+        removedFiles += sub.removedFiles;
+        freedBytes += sub.freedBytes;
+        const remaining = await fsp.readdir(full).catch(() => null);
+        if (remaining && remaining.length === 0) {
+          await fsp.rmdir(full).catch(() => {});
+        }
+      } else if (!keep.has(full)) {
+        const stat = await fsp.stat(full).catch(() => null);
+        await fsp.rm(full, { force: true }).catch(() => {});
+        removedFiles++;
+        freedBytes += stat?.size ?? 0;
+      }
+    }
+
+    return { removedFiles, freedBytes };
+  }
+
+  /*
+   * Сверяет versions/libraries/assets со смёрженным манифестом launchVersionId
+   * и удаляет всё, что в него не входит. mods/saves/config/resourcepacks/shaderpacks
+   * не трогает вообще — они вне этих трёх директорий.
+   */
+  public async pruneStaleFiles(
+    mcDir: string,
+    launchVersionId: string,
+    minecraftVersion: string,
+  ): Promise<PruneResult> {
+    const versionsDir = path.join(mcDir, "versions");
+    const librariesDir = path.join(mcDir, "libraries");
+    const assetsDir = path.join(mcDir, "assets");
+    const nativesDir = path.join(mcDir, "natives");
+
+    const result: PruneResult = {
+      removedFiles: 0,
+      removedDirs: 0,
+      freedBytes: 0,
+    };
+
+    // natives — полностью производные, дешевле снести и извлечь заново на запуске
+    // (заодно чинит: extractNatives не перезаписывает уже существующий файл,
+    // так что после смены версии там могла зависнуть старая .dll/.so)
+    await fsp.rm(nativesDir, { recursive: true, force: true }).catch(() => {});
+
+    // versions/ — держим только цепочку inheritsFrom текущего launchVersionId + ванильную версию
+    const keepVersionIds = new Set<string>([minecraftVersion]);
+    {
+      let current: string | undefined = launchVersionId;
+      const seen = new Set<string>();
+      while (current && !seen.has(current)) {
+        seen.add(current);
+        keepVersionIds.add(current);
+        const p = path.join(versionsDir, current, `${current}.json`);
+        if (!fs.existsSync(p)) break;
+        const data = JSON.parse(await fsp.readFile(p, "utf-8"));
+        current = data.inheritsFrom;
+      }
+    }
+
+    if (fs.existsSync(versionsDir)) {
+      for (const entry of await fsp.readdir(versionsDir, {
+        withFileTypes: true,
+      })) {
+        if (!entry.isDirectory() || keepVersionIds.has(entry.name)) continue;
+        const dirPath = path.join(versionsDir, entry.name);
+        result.freedBytes += await this.dirSize(dirPath);
+        await fsp.rm(dirPath, { recursive: true, force: true });
+        result.removedDirs++;
+      }
+    }
+
+    // libraries/ + assets/objects/ — ожидаемый набор берём из смёрженного манифеста
+    const merged = await loadMergedVersion(versionsDir, launchVersionId);
+    const expectedLibs = new Set<string>();
+
+    for (const lib of merged.libraries || []) {
+      if (lib.rules && !this.isRuleAllowed(lib.rules)) continue;
+
+      if (lib.downloads?.artifact) {
+        expectedLibs.add(path.join(librariesDir, lib.downloads.artifact.path));
+      } else if (lib.name) {
+        const [g, a, v, c] = lib.name.split(":");
+        const jar = c ? `${a}-${v}-${c}.jar` : `${a}-${v}.jar`;
+        expectedLibs.add(path.join(librariesDir, ...g.split("."), a, v, jar));
+      }
+
+      const nativesKey: string | undefined = lib.natives?.[this.getCurrentOs()];
+      if (nativesKey) {
+        const resolvedKey = nativesKey.replace(
+          "${arch}",
+          process.arch === "x64" ? "64" : "32",
+        );
+        const classifier = lib.downloads?.classifiers?.[resolvedKey];
+        if (classifier)
+          expectedLibs.add(path.join(librariesDir, classifier.path));
+      }
+    }
+
+    if (fs.existsSync(librariesDir)) {
+      const removed = await this.pruneDirRecursive(librariesDir, expectedLibs);
+      result.removedFiles += removed.removedFiles;
+      result.freedBytes += removed.freedBytes;
+    }
+
+    if (merged.assetIndex) {
+      const indexPath = path.join(
+        assetsDir,
+        "indexes",
+        `${merged.assetIndex.id}.json`,
+      );
+      if (fs.existsSync(indexPath)) {
+        const indexData = JSON.parse(await fsp.readFile(indexPath, "utf-8"));
+        const expectedObjects = new Set<string>();
+        for (const obj of Object.values<any>(indexData.objects || {})) {
+          const hash = obj.hash;
+          expectedObjects.add(
+            path.join(assetsDir, "objects", hash.slice(0, 2), hash),
+          );
+        }
+        const objectsDir = path.join(assetsDir, "objects");
+        if (fs.existsSync(objectsDir)) {
+          const removed = await this.pruneDirRecursive(
+            objectsDir,
+            expectedObjects,
+          );
+          result.removedFiles += removed.removedFiles;
+          result.freedBytes += removed.freedBytes;
+        }
+      }
+    }
+
+    return result;
   }
 }

@@ -11,9 +11,11 @@ import ModsPage from "./pages/ModsPage";
 import ResourcePacksPage from "./pages/ResourcePacksPage";
 import ShadersPage from "./pages/ShadersPage";
 import SettingsPage from "./pages/SettingsPage";
+import DataPacksPage from "./pages/DataPacksPage";
 
 import { LauncherProvider } from "./contexts/laucherContext";
 import { AlertProvider } from "./contexts/alertContext";
+
 
 function renderPage(tab: TabId) {
   switch (tab) {
@@ -27,6 +29,8 @@ function renderPage(tab: TabId) {
       return <ResourcePacksPage />;
     case "shaders":
       return <ShadersPage />;
+    case "datapacks":
+      return <DataPacksPage />;
     case "settings":
       return <SettingsPage />;
   }

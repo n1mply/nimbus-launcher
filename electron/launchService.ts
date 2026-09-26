@@ -14,6 +14,7 @@ import { formatUuidWithDashes, getAccountCredentials } from "./auth";
 import { Titles } from "prismarine-auth";
 import { parse as parseShellArgs } from "shell-quote";
 import type { Instance } from "../src/types";
+import { loadMergedVersion } from "./versionUtils";
 
 export class LaunchService {
   private runningProcesses = new Map<string, ReturnType<typeof spawn>>();
@@ -148,42 +149,6 @@ export class LaunchService {
     this.javaService = new JavaService();
   }
 
-  private async loadMergedVersion(
-    versionsDir: string,
-    versionId: string,
-  ): Promise<any> {
-    const p = path.join(versionsDir, versionId, `${versionId}.json`);
-    if (!fs.existsSync(p)) {
-      throw new Error(
-        `Манифест версии не найден: ${p}. Переустановите инстанс`,
-      );
-    }
-    const child = JSON.parse(await fsp.readFile(p, "utf-8"));
-    if (!child.inheritsFrom) return child;
-
-    const parent = await this.loadMergedVersion(
-      versionsDir,
-      child.inheritsFrom,
-    );
-    return {
-      ...parent,
-      ...child,
-      mainClass: child.mainClass ?? parent.mainClass,
-      assetIndex: child.assetIndex ?? parent.assetIndex,
-      // дочерние библиотеки первыми: при дедупликации побеждает Fabric
-      libraries: [...(child.libraries ?? []), ...(parent.libraries ?? [])],
-      arguments: {
-        game: [
-          ...(parent.arguments?.game ?? []),
-          ...(child.arguments?.game ?? []),
-        ],
-        jvm: [
-          ...(parent.arguments?.jvm ?? []),
-          ...(child.arguments?.jvm ?? []),
-        ],
-      },
-    };
-  }
   private resolveLaunchConfig(instance: Instance) {
     const s = instance.launchSettings;
     const memory = s?.memory ?? { minMb: 512, maxMb: 3072 };
@@ -227,7 +192,7 @@ export class LaunchService {
       }
     }
 
-    const versionData = await this.loadMergedVersion(versionsDir, versionId);
+    const versionData = await loadMergedVersion(versionsDir, versionId);
 
     const javaMajor = this.javaService.getRecommendedJavaVersion(
       instance.minecraftVersion,

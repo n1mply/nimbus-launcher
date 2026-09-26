@@ -20,9 +20,6 @@ export function getMinecraftDir(instanceId: string): string {
   return path.join(getInstanceDir(instanceId), 'minecraft');
 }
 
-/**
- * Читает конфигурацию instance.json
- */
 export async function readInstance(instanceId: string): Promise<Instance> {
   const filePath = getInstanceConfigPath(instanceId);
   const data = await fs.readFile(filePath, 'utf-8');

@@ -182,8 +182,6 @@ export async function renameInstance(instanceId: string, newName: string) {
 }
 
 const RAM_FLOOR_MB = 512;
-const WINDOW_MIN = 320;
-const WINDOW_MAX = 7680;
 
 export interface UpdateInstanceSettingsPayload {
   name?: string;

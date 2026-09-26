@@ -1,19 +1,19 @@
-import { app, ipcMain, shell } from 'electron';
-import path from 'path';
-import fs from 'fs/promises';
-import { existsSync } from 'fs';
+import { app, ipcMain, shell } from "electron";
+import path from "path";
+import fs from "fs/promises";
+import { existsSync } from "fs";
 
-export type DeleteMode = 'soft' | 'hard';
+export type DeleteMode = "soft" | "hard";
 
 export function registerFolderHandlers() {
   // Открытие папки игры
-  ipcMain.handle('folder:openInstanceFolder', async (_, folderName: string) => {
+  ipcMain.handle("folder:openInstanceFolder", async (_, folderName: string) => {
     try {
       const targetPath = path.join(
-        app.getPath('userData'), 
-        'instances',
+        app.getPath("userData"),
+        "instances",
         folderName,
-        'minecraft'
+        "minecraft",
       );
 
       if (!existsSync(targetPath)) {
@@ -21,33 +21,40 @@ export function registerFolderHandlers() {
       }
 
       const errorMessage = await shell.openPath(targetPath);
-      
+
       if (errorMessage) {
-        console.error('Ошибка shell.openPath:', errorMessage);
+        console.error("shell.openPath error:", errorMessage);
         return { success: false, error: errorMessage };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error('Ошибка при работе с ФС:', error);
+      console.error("File system error:", error);
       return { success: false, error: error.message };
     }
   });
 
   // Удаление файлов сборки
   ipcMain.handle(
-    'folder:deleteInstanceFolder',
-    async (_, { folderName, mode }: { folderName: string; mode: DeleteMode }) => {
+    "folder:deleteInstanceFolder",
+    async (
+      _,
+      { folderName, mode }: { folderName: string; mode: DeleteMode },
+    ) => {
       try {
-        const instancePath = path.join(app.getPath('userData'), 'instances', folderName);
-        const minecraftPath = path.join(instancePath, 'minecraft');
+        const instancePath = path.join(
+          app.getPath("userData"),
+          "instances",
+          folderName,
+        );
+        const minecraftPath = path.join(instancePath, "minecraft");
 
-        if (mode === 'soft') {
+        if (mode === "soft") {
           // Удаляем только папку minecraft (файлы игры/моды/кэш загрузки)
           if (existsSync(minecraftPath)) {
             await fs.rm(minecraftPath, { recursive: true, force: true });
           }
-        } else if (mode === 'hard') {
+        } else if (mode === "hard") {
           // Полное удаление папки сборки вместе с instance.json
           if (existsSync(instancePath)) {
             await fs.rm(instancePath, { recursive: true, force: true });
@@ -56,9 +63,40 @@ export function registerFolderHandlers() {
 
         return { success: true };
       } catch (error: any) {
-        console.error(`Ошибка при удалении (${mode}):`, error);
+        console.error(`Delete error (${mode}):`, error);
         return { success: false, error: error.message };
       }
-    }
+    },
   );
+  
+  ipcMain.handle("folder:openLatestLog", async (_, folderName: string) => {
+    try {
+      const logPath = path.join(
+        app.getPath("userData"),
+        "instances",
+        folderName,
+        "minecraft",
+        "logs",
+        "latest.log",
+      );
+
+      if (!existsSync(logPath)) {
+        return {
+          success: false,
+          error: "No logs yet — launch the instance at least once",
+        };
+      }
+
+      const errorMessage = await shell.openPath(logPath);
+      if (errorMessage) {
+        console.error("shell.openPath error:", errorMessage);
+        return { success: false, error: errorMessage };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error opening log:", error);
+      return { success: false, error: error.message };
+    }
+  });
 }

@@ -4,6 +4,7 @@ export type TabId =
   | "modpacks"
   | "resourcepacks"
   | "shaders"
+  | "datapacks"
   | "settings";
 
 export type Account = {

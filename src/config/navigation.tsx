@@ -1,4 +1,4 @@
-import { Library, FileBox, Package, Image, Sparkle, Settings } from 'lucide-react'
+import { Library, FileBox, Package, Image, Sparkle, Settings, FileText } from 'lucide-react'
 import type { TabId } from '../types'
 
 export type NavItem = {
@@ -11,6 +11,7 @@ export const mainNavItems: NavItem[] = [
   { id: 'instances', name: 'Instances', icon: <Library size={24} /> },
   { id: 'mods', name: 'Mods', icon: <FileBox size={24} /> },
   { id: 'modpacks', name: 'Mod Packs', icon: <Package size={24} /> },
+  { id: 'datapacks', name: 'Data Packs', icon: <FileText size={24} /> },
   { id: 'resourcepacks', name: 'Resourse Packs', icon: <Image size={24} /> },
   { id: 'shaders', name: 'Shaders', icon: <Sparkle size={24} /> },
 ]

@@ -27,7 +27,7 @@ export class LoaderInstaller {
 
   /** Возвращает id установленного профиля версии (имя папки в versions/) */
   public async install(o: InstallOptions): Promise<string> {
-    if (!o.loaderVersion) throw new Error(`${o.modloader}: версия загрузчика не указана`);
+    if (!o.loaderVersion) throw new Error(`${o.modloader}: loader version not specified`);
 
     const installerPath = path.join(
       o.mcDir, "installers", `${o.modloader}-${o.mcVersion}-${o.loaderVersion}-installer.jar`,
@@ -43,7 +43,7 @@ export class LoaderInstaller {
     const AdmZip = (await import("adm-zip")).default;
     const profile = JSON.parse(new AdmZip(installerPath).readAsText("install_profile.json"));
     const versionId: string | undefined = profile.version ?? profile.versionInfo?.id;
-    if (!versionId) throw new Error("Не удалось определить id версии из install_profile.json");
+    if (!versionId) throw new Error("Failed to determine version id from install_profile.json");
 
     const versionDir = path.join(o.mcDir, "versions", versionId);
     const marker = path.join(versionDir, ".nimbus-installed");
@@ -80,12 +80,12 @@ export class LoaderInstaller {
       child.on("close", (code) => {
         o.signal?.removeEventListener("abort", onAbort);
         if (code === 0) resolve();
-        else reject(new Error(`Installer завершился с кодом ${code}:\n${tail.join("\n")}`));
+        else reject(new Error(`Installer exited with code ${code}:\n${tail.join("\n")}`));
       });
     });
 
     if (!fs.existsSync(path.join(versionDir, `${versionId}.json`))) {
-      throw new Error(`Installer отработал, но профиль ${versionId} не создан`);
+      throw new Error(`Installer finished, but profile ${versionId} was not created`);
     }
     await fsp.writeFile(marker, "", "utf-8");
     return versionId;

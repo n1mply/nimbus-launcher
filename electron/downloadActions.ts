@@ -20,7 +20,7 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
 
   ipcMain.handle("instance:install", async (_, instanceId: string) => {
     if (activeControllers.has(instanceId)) {
-      throw new Error("Установка этого инстанса уже выполняется");
+      throw new Error("Installation of this instance is already in progress");
     }
 
     const abortController = new AbortController();
@@ -119,6 +119,29 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
       }
 
       await writeInstance(instanceId, { modloaderVersion, launchVersionId });
+
+      mainWindow.webContents.send("download:progress", {
+        instanceId,
+        statusText: "Cleaning up unused files...",
+        progress: 99,
+        downloadedBytes: 0,
+        totalBytes: 0,
+      });
+
+      try {
+        const prune = await integrityService.pruneStaleFiles(
+          mcDir,
+          launchVersionId ?? instance.minecraftVersion,
+          instance.minecraftVersion,
+        );
+        console.log(
+          `[Integrity] Removed ${prune.removedFiles} files, ${prune.removedDirs} version folders (${prune.freedBytes} bytes)`,
+        );
+      } catch (e) {
+        console.warn("[Integrity] Cleanup skipped due to error:", e);
+      }
+
+      await setInstanceStatus(instanceId, "installed");
 
       await setInstanceStatus(instanceId, "installed");
       mainWindow.webContents.send("download:complete", { instanceId });

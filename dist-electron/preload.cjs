@@ -93,7 +93,8 @@ electron.contextBridge.exposeInMainWorld("instancesAPI", instancesApiMethods);
 electron.contextBridge.exposeInMainWorld("instanceAPI", instancesApiMethods);
 electron.contextBridge.exposeInMainWorld("folderAPI", {
   openInstanceFolder: (folderName) => electron.ipcRenderer.invoke("folder:openInstanceFolder", folderName),
-  deleteInstanceFolder: (folderName, mode) => electron.ipcRenderer.invoke("folder:deleteInstanceFolder", { folderName, mode })
+  deleteInstanceFolder: (folderName, mode) => electron.ipcRenderer.invoke("folder:deleteInstanceFolder", { folderName, mode }),
+  openLatestLog: (folderName) => electron.ipcRenderer.invoke("folder:openLatestLog", folderName)
 });
 electron.contextBridge.exposeInMainWorld("systemAPI", {
   getTotalMemoryMb: () => electron.ipcRenderer.invoke("system:getTotalMemoryMb")
