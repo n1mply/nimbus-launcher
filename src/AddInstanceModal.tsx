@@ -211,6 +211,7 @@ export default function AddInstanceModal({
       size="medium"
       isFlexible
       title="Create instance"
+      closeOnOutsideClick={false}
     >
       <div className="flex flex-col gap-5">
         {/* Аватарка сборки */}

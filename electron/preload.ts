@@ -143,6 +143,13 @@ contextBridge.exposeInMainWorld("javaAPI", {
   pickExecutable: () => ipcRenderer.invoke("java:pickExecutable"),
 });
 
+contextBridge.exposeInMainWorld("modrinthAPI", {
+  getCategories: (projectType: string) => ipcRenderer.invoke("modrinthAPI:getCategories", projectType),
+  searchProjects: (options: any) => ipcRenderer.invoke("modrinthAPI:searchProjects", options),
+})
+
 contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });
+
+
