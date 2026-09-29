@@ -1,5 +1,6 @@
 // modrinthActions.ts
 import { ipcMain } from "electron";
+import { saveContentToInstance } from "./folderActions";
 
 const MODRINTH_API_BASE = "https://api.modrinth.com/v2";
 const USER_AGENT = "n1mply/nimbus-launcher/1.0.0 (n1mply.dev@gmail.com)";
@@ -92,6 +93,14 @@ export interface SearchOptions {
   offset?: number;
 }
 
+export interface InstallToInstanceOptions {
+  projectId: string;
+  projectType: string;
+  instanceFolderName: string;
+  minecraftVersion: string;
+  modloader?: string;
+}
+
 let categoriesCache: ModrinthCategory[] | null = null;
 let categoriesPromise: Promise<ModrinthCategory[]> | null = null;
 
@@ -170,6 +179,84 @@ export async function searchModrinthProjects(
   return result;
 }
 
+export async function installModrinthProjectToInstance(
+  options: InstallToInstanceOptions,
+) {
+  const {
+    projectId,
+    projectType,
+    instanceFolderName,
+    minecraftVersion,
+    modloader,
+  } = options;
+
+  // Формируем фильтры для версий Modrinth
+  const params = new URLSearchParams();
+
+  // Для модов строго указываем и лоадер, и версию игры
+  if (projectType === "mod" && modloader && modloader !== "vanilla") {
+    params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
+  }
+  if (minecraftVersion) {
+    params.set("game_versions", JSON.stringify([minecraftVersion]));
+  }
+
+  // 1. Ищем совместимые версии файла
+  let versions = await modrinthFetch<any[]>(
+    `/project/${projectId}/version?${params.toString()}`,
+  );
+
+  // Если для ресурспака/шейдера нет точного совпадения по версии игры — берем последнюю доступную
+  if (
+    (!versions || versions.length === 0) &&
+    (projectType === "resourcepack" || projectType === "shader")
+  ) {
+    versions = await modrinthFetch<any[]>(`/project/${projectId}/version`);
+  }
+
+  if (!versions || versions.length === 0) {
+    throw new Error(
+      `No compatible version found for ${modloader ?? ""} ${minecraftVersion}`,
+    );
+  }
+
+  // 2. Берем самую свежую версию и её primary-файл
+  const targetVersion = versions[0];
+  const targetFile =
+    targetVersion.files.find((f: any) => f.primary) || targetVersion.files[0];
+
+  if (!targetFile || !targetFile.url) {
+    throw new Error("No downloadable file found in this version");
+  }
+
+  // 3. Скачиваем файл в память
+  const response = await fetch(targetFile.url, { headers: modrinthHeaders() });
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const fileBuffer = Buffer.from(arrayBuffer);
+
+  // 4. Сохраняем файл на диск в папку сборки
+  const saveResult = await saveContentToInstance(
+    instanceFolderName,
+    projectType,
+    targetFile.filename,
+    fileBuffer,
+  );
+
+  if (!saveResult.success) {
+    throw new Error(saveResult.error || "Failed to save file");
+  }
+
+  return {
+    success: true,
+    fileName: targetFile.filename,
+    versionNumber: targetVersion.version_number,
+  };
+}
+
 export function registerModrinthHandlers(): void {
   ipcMain.handle(
     "modrinthAPI:getCategories",
@@ -182,6 +269,13 @@ export function registerModrinthHandlers(): void {
     "modrinthAPI:searchProjects",
     async (_, options: SearchOptions) => {
       return await searchModrinthProjects(options);
+    },
+  );
+
+  ipcMain.handle(
+    "modrinthAPI:installToInstance",
+    async (_, options: InstallToInstanceOptions) => {
+      return await installModrinthProjectToInstance(options);
     },
   );
 }

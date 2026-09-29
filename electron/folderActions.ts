@@ -4,6 +4,53 @@ import fs from "fs/promises";
 import { existsSync } from "fs";
 
 export type DeleteMode = "soft" | "hard";
+export type ContentFolderType = "mod" | "resourcepack" | "shader" | "datapack";
+
+export async function saveContentToInstance(
+  folderName: string,
+  type: string,
+  fileName: string,
+  buffer: Buffer
+): Promise<{ success: boolean; filePath?: string; error?: string }> {
+  try {
+    const minecraftPath = path.join(
+      app.getPath("userData"),
+      "instances",
+      folderName,
+      "minecraft"
+    );
+
+    let subFolder = "";
+    switch (type) {
+      case "mod":
+        subFolder = "mods";
+        break;
+      case "resourcepack":
+        subFolder = "resourcepacks";
+        break;
+      case "shader":
+        subFolder = "shaderpacks";
+        break;
+      case "datapack":
+        throw new Error("Datapacks installation requires a specific world");
+      default:
+        throw new Error(`Unsupported content type: ${type}`);
+    }
+
+    const targetDir = path.join(minecraftPath, subFolder);
+    if (!existsSync(targetDir)) {
+      await fs.mkdir(targetDir, { recursive: true });
+    }
+
+    const fullPath = path.join(targetDir, fileName);
+    await fs.writeFile(fullPath, buffer);
+
+    return { success: true, filePath: fullPath };
+  } catch (error: any) {
+    console.error(`[saveContentToInstance] Error:`, error);
+    return { success: false, error: error.message };
+  }
+}
 
 export function registerFolderHandlers() {
   // Открытие папки игры

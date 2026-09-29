@@ -13,7 +13,7 @@ export async function loadMergedVersion(
 ): Promise<any> {
   const p = path.join(versionsDir, versionId, `${versionId}.json`);
   if (!fs.existsSync(p)) {
-    throw new Error(`Манифест версии не найден: ${p}. Переустановите инстанс`);
+    throw new Error(`Version's manifest not found: ${p}. Reinstall instance!`);
   }
   const child = JSON.parse(await fsp.readFile(p, "utf-8"));
   if (!child.inheritsFrom) return child;

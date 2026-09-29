@@ -105,7 +105,8 @@ electron.contextBridge.exposeInMainWorld("javaAPI", {
 });
 electron.contextBridge.exposeInMainWorld("modrinthAPI", {
   getCategories: (projectType) => electron.ipcRenderer.invoke("modrinthAPI:getCategories", projectType),
-  searchProjects: (options) => electron.ipcRenderer.invoke("modrinthAPI:searchProjects", options)
+  searchProjects: (options) => electron.ipcRenderer.invoke("modrinthAPI:searchProjects", options),
+  installToInstance: (options) => electron.ipcRenderer.invoke("modrinthAPI:installToInstance", options)
 });
 electron.contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file) => electron.webUtils.getPathForFile(file)

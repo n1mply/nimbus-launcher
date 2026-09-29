@@ -6,6 +6,7 @@ import CustomInput, { type CustomInputOption } from "../CustomInput";
 import Pagination from "../Pagination";
 import type { ContentItem, ContentType } from "../types";
 import { useLauncher } from "../contexts/laucherContext";
+import AddToInstanceModal from "../AddToInstanceModal";
 
 type Props = {
   contentType: ContentType;
@@ -24,7 +25,10 @@ const MODRINTH_PROJECT_TYPE: Record<ContentType, string> = {
   datapack: "datapack",
 };
 
-const SORT_API_MAP: Record<string, "relevance" | "downloads" | "follows" | "newest" | "updated"> = {
+const SORT_API_MAP: Record<
+  string,
+  "relevance" | "downloads" | "follows" | "newest" | "updated"
+> = {
   popularity: "relevance",
   downloads: "downloads",
   updated: "updated",
@@ -70,6 +74,20 @@ export default function ContentBrowserPage({
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  const handleAddClick = (item: ContentItem) => {
+    // Для модпаков и датапаков пока оставляем пустым по твоему условию:
+    if (item.type === "modpack" || item.type === "datapack") {
+      return;
+    }
+
+    // Для модов, ресурспаков и шейдеров открываем модалку:
+    setSelectedItem(item);
+    setShowModal(true);
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
@@ -85,8 +103,11 @@ export default function ContentBrowserPage({
     (async () => {
       try {
         const projectType = MODRINTH_PROJECT_TYPE[contentType];
-        const categories = await (window as any).modrinthAPI?.getCategories?.(projectType);
-        if (cancelled || !Array.isArray(categories) || categories.length === 0) return;
+        const categories = await (window as any).modrinthAPI?.getCategories?.(
+          projectType,
+        );
+        if (cancelled || !Array.isArray(categories) || categories.length === 0)
+          return;
 
         setTypeOptions([
           { value: "all", label: "All" },
@@ -96,7 +117,10 @@ export default function ContentBrowserPage({
           })),
         ]);
       } catch (err) {
-        console.warn("[ContentBrowserPage] Failed to load Modrinth categories:", err);
+        console.warn(
+          "[ContentBrowserPage] Failed to load Modrinth categories:",
+          err,
+        );
       }
     })();
 
@@ -260,7 +284,7 @@ export default function ContentBrowserPage({
         ) : (
           <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <ContentTile key={item.id} item={item} addLabel={addLabel}/>
+              <ContentTile key={item.id} item={item} addLabel={addLabel} onAdd={handleAddClick}/>
             ))}
           </div>
         )}
@@ -276,6 +300,14 @@ export default function ContentBrowserPage({
           />
         </div>
       )}
+      <AddToInstanceModal
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setSelectedItem(null);
+        }}
+        item={selectedItem}
+      />
     </div>
   );
 }

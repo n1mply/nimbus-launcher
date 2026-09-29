@@ -146,6 +146,7 @@ contextBridge.exposeInMainWorld("javaAPI", {
 contextBridge.exposeInMainWorld("modrinthAPI", {
   getCategories: (projectType: string) => ipcRenderer.invoke("modrinthAPI:getCategories", projectType),
   searchProjects: (options: any) => ipcRenderer.invoke("modrinthAPI:searchProjects", options),
+  installToInstance: (options: any) => ipcRenderer.invoke("modrinthAPI:installToInstance", options),
 })
 
 contextBridge.exposeInMainWorld("webUtilsAPI", {
