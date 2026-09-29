@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   FolderOpen,
-  Cpu,
+  Coffee,
   ShieldCheck,
   FileText,
 } from "lucide-react";
@@ -756,7 +756,7 @@ export default function InstanceSettingsModal({
 
             {/* ── Java & memory ── */}
             <Section
-              icon={<Cpu size={15} />}
+              icon={<Coffee size={15} />}
               title="Java & memory"
               description="How much memory to allocate and which Java to use."
             >

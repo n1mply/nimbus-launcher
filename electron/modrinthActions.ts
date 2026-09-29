@@ -1,56 +1,16 @@
 // modrinthActions.ts
 import { ipcMain } from "electron";
-import { saveContentToInstance } from "./folderActions";
+import {
+  saveContentToInstance,
+  getInstalledContent,
+  recordInstalledContent,
+  InstalledContentRecord,
+} from "./folderActions";
+
+import type { ContentItem } from "../src/types";
 
 const MODRINTH_API_BASE = "https://api.modrinth.com/v2";
 const USER_AGENT = "n1mply/nimbus-launcher/1.0.0 (n1mply.dev@gmail.com)";
-
-function modrinthHeaders(): HeadersInit {
-  return { "User-Agent": USER_AGENT };
-}
-
-async function modrinthFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${MODRINTH_API_BASE}${path}`, {
-    headers: modrinthHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Modrinth API error ${res.status}: ${res.statusText}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-interface CacheEntry<T> {
-  data: T;
-  expiresAt: number;
-}
-
-const searchCache = new Map<string, CacheEntry<ModrinthSearchResult>>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const MAX_CACHE_SIZE = 100;
-
-function getFromCache(key: string): ModrinthSearchResult | null {
-  const entry = searchCache.get(key);
-  if (!entry) return null;
-
-  if (Date.now() > entry.expiresAt) {
-    searchCache.delete(key);
-    return null;
-  }
-
-  return entry.data;
-}
-
-function setToCache(key: string, data: ModrinthSearchResult): void {
-  if (searchCache.size >= MAX_CACHE_SIZE) {
-    const firstKey = searchCache.keys().next().value;
-    if (firstKey) searchCache.delete(firstKey);
-  }
-
-  searchCache.set(key, {
-    data,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  });
-}
 
 export interface ModrinthCategory {
   icon: string;
@@ -101,8 +61,70 @@ export interface InstallToInstanceOptions {
   modloader?: string;
 }
 
+export interface CheckEligibilityOptions {
+  projectId: string;
+  projectType: string;
+  instanceFolderName: string;
+  minecraftVersion: string;
+  modloader?: string;
+}
+
+export interface EligibilityResult {
+  isDuplicate: boolean;
+  existingFileName?: string;
+  version: any;
+  missingDependencies: ContentItem[];
+}
+
 let categoriesCache: ModrinthCategory[] | null = null;
 let categoriesPromise: Promise<ModrinthCategory[]> | null = null;
+
+function modrinthHeaders(): HeadersInit {
+  return { "User-Agent": USER_AGENT };
+}
+
+async function modrinthFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${MODRINTH_API_BASE}${path}`, {
+    headers: modrinthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Modrinth API error ${res.status}: ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const searchCache = new Map<string, CacheEntry<ModrinthSearchResult>>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_CACHE_SIZE = 100;
+
+function getFromCache(key: string): ModrinthSearchResult | null {
+  const entry = searchCache.get(key);
+  if (!entry) return null;
+
+  if (Date.now() > entry.expiresAt) {
+    searchCache.delete(key);
+    return null;
+  }
+
+  return entry.data;
+}
+
+function setToCache(key: string, data: ModrinthSearchResult): void {
+  if (searchCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = searchCache.keys().next().value;
+    if (firstKey) searchCache.delete(firstKey);
+  }
+
+  searchCache.set(key, {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+}
 
 export async function loadAllCategories(): Promise<ModrinthCategory[]> {
   if (categoriesCache) return categoriesCache;
@@ -257,6 +279,188 @@ export async function installModrinthProjectToInstance(
   };
 }
 
+export async function checkInstallationEligibility(
+  opts: CheckEligibilityOptions,
+): Promise<EligibilityResult> {
+  const {
+    projectId,
+    projectType,
+    instanceFolderName,
+    minecraftVersion,
+    modloader,
+  } = opts;
+
+  // 1. Проверяем, установлен ли уже этот проект
+  const installed = await getInstalledContent(instanceFolderName);
+  const existing = installed.find((r) => r.projectId === projectId);
+
+  // 2. Получаем подходящую версию мода
+  const params = new URLSearchParams();
+  if (projectType === "mod" && modloader && modloader !== "vanilla") {
+    params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
+  }
+  if (minecraftVersion) {
+    params.set("game_versions", JSON.stringify([minecraftVersion]));
+  }
+
+  let versions = await modrinthFetch<any[]>(
+    `/project/${projectId}/version?${params.toString()}`,
+  );
+  if (
+    (!versions || versions.length === 0) &&
+    (projectType === "resourcepack" || projectType === "shader")
+  ) {
+    versions = await modrinthFetch<any[]>(`/project/${projectId}/version`);
+  }
+
+  if (!versions || versions.length === 0) {
+    throw new Error(
+      `No compatible version found for ${modloader ?? ""} ${minecraftVersion}`,
+    );
+  }
+
+  const targetVersion = versions[0];
+
+  // 3. Проверяем зависимости (только для модов)
+  const missingDeps: any[] = [];
+  if (projectType === "mod" && Array.isArray(targetVersion.dependencies)) {
+    // Находим обязательные зависимости
+    const requiredDeps = targetVersion.dependencies.filter(
+      (d: any) => d.dependency_type === "required" && d.project_id,
+    );
+
+    // Отсекаем те, что УЖЕ установлены в этой сборке
+    const neededProjectIds = requiredDeps
+      .map((d: any) => d.project_id)
+      .filter((id: string) => !installed.some((inst) => inst.projectId === id));
+
+    // Если есть неустановленные зависимости — запрашиваем инфу о них пакетом
+    if (neededProjectIds.length > 0) {
+      const projects = await modrinthFetch<any[]>(
+        `/projects?ids=${encodeURIComponent(JSON.stringify(neededProjectIds))}`,
+      );
+
+      // Преобразуем в ContentItem для карточек
+      for (const p of projects) {
+        missingDeps.push({
+          id: p.id,
+          name: p.title,
+          author: p.author ?? "Unknown",
+          summary: p.description,
+          iconUrl: p.icon_url,
+          downloads: p.downloads,
+          follows: p.follows,
+          updatedAt: p.updated,
+          type: "mod",
+          tags: (p.categories || []).map((cat: string) => ({
+            label: cat.charAt(0).toUpperCase() + cat.slice(1),
+            variant: "generic",
+          })),
+        });
+      }
+    }
+  }
+
+  return {
+    isDuplicate: !!existing,
+    existingFileName: existing?.fileName,
+    version: targetVersion,
+    missingDependencies: missingDeps,
+  };
+}
+
+/**
+ * Установка конкретного файла и запись в реестр
+ */
+async function downloadAndSaveSingleProject(
+  projectId: string,
+  projectType: string,
+  instanceFolderName: string,
+  version: any,
+) {
+  const file = version.files.find((f: any) => f.primary) || version.files[0];
+  if (!file?.url) throw new Error("No downloadable file in version");
+
+  const response = await fetch(file.url, { headers: modrinthHeaders() });
+  if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const res = await saveContentToInstance(
+    instanceFolderName,
+    projectType,
+    file.filename,
+    buffer,
+  );
+  if (!res.success) throw new Error(res.error);
+
+  await recordInstalledContent(instanceFolderName, {
+    projectId,
+    projectType,
+    versionId: version.id,
+    fileName: file.filename,
+    installedAt: Date.now(),
+  });
+
+  return file.filename;
+}
+
+/**
+ * Пакетная установка: основной мод + выбранные зависимости
+ */
+export async function installWithDependencies(opts: {
+  mainProject: { id: string; type: string; version: any };
+  dependencyProjectIds?: string[];
+  instanceFolderName: string;
+  minecraftVersion: string;
+  modloader?: string;
+}) {
+  const {
+    mainProject,
+    dependencyProjectIds,
+    instanceFolderName,
+    minecraftVersion,
+    modloader,
+  } = opts;
+
+  // 1. Сначала скачиваем зависимости
+  if (dependencyProjectIds && dependencyProjectIds.length > 0) {
+    for (const depId of dependencyProjectIds) {
+      try {
+        const params = new URLSearchParams();
+        if (modloader && modloader !== "vanilla") {
+          params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
+        }
+        if (minecraftVersion) {
+          params.set("game_versions", JSON.stringify([minecraftVersion]));
+        }
+        const vers = await modrinthFetch<any[]>(
+          `/project/${depId}/version?${params.toString()}`,
+        );
+        if (vers && vers.length > 0) {
+          await downloadAndSaveSingleProject(
+            depId,
+            "mod",
+            instanceFolderName,
+            vers[0],
+          );
+        }
+      } catch (e) {
+        console.warn(`Could not install dependency ${depId}:`, e);
+      }
+    }
+  }
+
+  // 2. Скачиваем целевой мод
+  const fileName = await downloadAndSaveSingleProject(
+    mainProject.id,
+    mainProject.type,
+    instanceFolderName,
+    mainProject.version,
+  );
+
+  return { success: true, fileName };
+}
+
 export function registerModrinthHandlers(): void {
   ipcMain.handle(
     "modrinthAPI:getCategories",
@@ -276,6 +480,20 @@ export function registerModrinthHandlers(): void {
     "modrinthAPI:installToInstance",
     async (_, options: InstallToInstanceOptions) => {
       return await installModrinthProjectToInstance(options);
+    },
+  );
+
+  ipcMain.handle(
+    "modrinthAPI:checkEligibility",
+    async (_, opts: CheckEligibilityOptions) => {
+      return await checkInstallationEligibility(opts);
+    },
+  );
+
+  ipcMain.handle(
+    "modrinthAPI:installWithDependencies",
+    async (_, opts: any) => {
+      return await installWithDependencies(opts);
     },
   );
 }

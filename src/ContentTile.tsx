@@ -25,9 +25,15 @@ type Props = {
   item: ContentItem;
   onAdd?: (item: ContentItem) => void;
   addLabel?: string;
+  isCompact?: boolean;
 };
 
-export default function ContentTile({ item, onAdd, addLabel = "Add to instance" }: Props) {
+export default function ContentTile({
+  item,
+  onAdd,
+  addLabel = "Add to instance",
+  isCompact = false,
+}: Props) {
   return (
     <div className="flex gap-4 rounded-xl border border-white/5 bg-white/[0.02] p-4 transition-colors hover:bg-white/[0.035]">
       <div
@@ -58,35 +64,41 @@ export default function ContentTile({ item, onAdd, addLabel = "Add to instance" 
         <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-gray-400">
           {item.summary}
         </p>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {item.tags.map((t) => (
-            <Tag key={t.label} label={t.label} variant={t.variant} />
-          ))}
-        </div>
+        {!isCompact && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {item.tags.map((t) => (
+              <Tag key={t.label} label={t.label} variant={t.variant} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex shrink-0 flex-col items-end justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => onAdd?.(item)}
-          className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-[12.5px] font-medium text-blue-300 transition-colors hover:bg-blue-500/15 hover:border-blue-400/30 cursor-pointer active:scale-[0.98]"
-        >
-          <PlusCircle size={14} />
-          {addLabel}
-        </button>
-        <div className="flex flex-col items-end gap-1 text-[12px] text-gray-500">
-          <div className="flex items-center gap-3">
+        {!isCompact && (
+          <button
+            type="button"
+            onClick={() => onAdd?.(item)}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-[12.5px] font-medium text-blue-300 transition-colors hover:bg-blue-500/15 hover:border-blue-400/30 cursor-pointer active:scale-[0.98]"
+          >
+            <PlusCircle size={14} />
+            {addLabel}
+          </button>
+        )}
+        {!isCompact && (
+          <div className="flex flex-col items-end gap-1 text-[12px] text-gray-500">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <Download size={12} /> {formatCount(item.downloads)}
+              </span>
+              <span className="flex items-center gap-1">
+                <Heart size={12} /> {formatCount(item.follows)}
+              </span>
+            </div>
             <span className="flex items-center gap-1">
-              <Download size={12} /> {formatCount(item.downloads)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Heart size={12} /> {formatCount(item.follows)}
+              <Clock size={12} /> {formatRelativeTime(item.updatedAt)}
             </span>
           </div>
-          <span className="flex items-center gap-1">
-            <Clock size={12} /> {formatRelativeTime(item.updatedAt)}
-          </span>
-        </div>
+        )}
       </div>
     </div>
   );

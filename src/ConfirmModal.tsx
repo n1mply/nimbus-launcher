@@ -10,9 +10,19 @@ type Props = {
   yesText: string;
   noText: string;
   title: string;
+  isDangerous?: boolean;
 };
 
-export default function ConfirmModal({ isOpen, onClose, onConfirm, warningText, yesText, noText, title }: Props) {
+export default function ConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  warningText,
+  yesText,
+  noText,
+  title,
+  isDangerous = true,
+}: Props) {
   const [isCancelling, setIsCancelling] = useState(false);
 
   const handleConfirm = async () => {
@@ -24,6 +34,16 @@ export default function ConfirmModal({ isOpen, onClose, onConfirm, warningText, 
     }
   };
 
+  const warningStyles = isDangerous
+    ? "border-red-500/20 bg-red-500/10 text-red-200"
+    : "border-amber-500/20 bg-amber-500/10 text-amber-200";
+
+  const warningIconStyles = isDangerous ? "text-red-400" : "text-amber-400";
+
+  const confirmButtonStyles = isDangerous
+    ? "border-red-500/30 bg-red-500/20 text-red-300 hover:bg-red-500/30 hover:border-red-500/50"
+    : "border-amber-500/30 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 hover:border-amber-500/50";
+
   return (
     <CustomModal
       isOpen={isOpen}
@@ -34,11 +54,14 @@ export default function ConfirmModal({ isOpen, onClose, onConfirm, warningText, 
       closeOnOutsideClick={false}
     >
       <div className="flex flex-col gap-5 pt-1">
-        <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-red-200">
-          <AlertTriangle className="mt-0.5 shrink-0 text-red-400" size={18} />
-          <p className="text-[13px] leading-relaxed">
-            {warningText}
-          </p>
+        <div
+          className={`flex items-start gap-3 rounded-xl border p-3.5 ${warningStyles}`}
+        >
+          <AlertTriangle
+            className={`mt-0.5 shrink-0 ${warningIconStyles}`}
+            size={18}
+          />
+          <p className="text-[13px] leading-relaxed">{warningText}</p>
         </div>
 
         <div className="flex items-center justify-end gap-2.5">
@@ -55,7 +78,7 @@ export default function ConfirmModal({ isOpen, onClose, onConfirm, warningText, 
             type="button"
             disabled={isCancelling}
             onClick={handleConfirm}
-            className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/20 px-4 py-2 text-[13px] font-semibold text-red-300 transition-colors hover:bg-red-500/30 hover:border-red-500/50 cursor-pointer active:scale-95 disabled:opacity-50"
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-semibold transition-colors cursor-pointer active:scale-95 disabled:opacity-50 ${confirmButtonStyles}`}
           >
             {isCancelling && <Loader2 size={15} className="animate-spin" />}
             <span>{noText}</span>

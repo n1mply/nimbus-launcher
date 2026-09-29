@@ -6,6 +6,59 @@ import { existsSync } from "fs";
 export type DeleteMode = "soft" | "hard";
 export type ContentFolderType = "mod" | "resourcepack" | "shader" | "datapack";
 
+export interface InstalledContentRecord {
+  projectId: string;
+  projectType: string;
+  versionId?: string;
+  fileName: string;
+  installedAt: number;
+}
+
+export async function getInstalledContent(folderName: string): Promise<InstalledContentRecord[]> {
+  const instancePath = path.join(app.getPath("userData"), "instances", folderName);
+  const manifestPath = path.join(instancePath, "installed_content.json");
+
+  if (!existsSync(manifestPath)) {
+    return [];
+  }
+
+  try {
+    const raw = await fs.readFile(manifestPath, "utf-8");
+    const records: InstalledContentRecord[] = JSON.parse(raw);
+
+    const validRecords: InstalledContentRecord[] = [];
+    for (const rec of records) {
+      let sub = "mods";
+      if (rec.projectType === "resourcepack") sub = "resourcepacks";
+      if (rec.projectType === "shader") sub = "shaderpacks";
+
+      const filePath = path.join(instancePath, "minecraft", sub, rec.fileName);
+      if (existsSync(filePath)) {
+        validRecords.push(rec);
+      }
+    }
+
+    return validRecords;
+  } catch {
+    return [];
+  }
+}
+
+export async function recordInstalledContent(
+  folderName: string,
+  record: InstalledContentRecord
+): Promise<void> {
+  const instancePath = path.join(app.getPath("userData"), "instances", folderName);
+  const manifestPath = path.join(instancePath, "installed_content.json");
+
+  let list = await getInstalledContent(folderName);
+  // Убираем старую запись этого же проекта, если перезаписываем
+  list = list.filter((r) => r.projectId !== record.projectId);
+  list.push(record);
+
+  await fs.writeFile(manifestPath, JSON.stringify(list, null, 2), "utf-8");
+}
+
 export async function saveContentToInstance(
   folderName: string,
   type: string,

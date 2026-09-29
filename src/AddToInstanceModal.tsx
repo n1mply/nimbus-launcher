@@ -4,6 +4,8 @@ import InstanceTile from "./InstanceTile";
 import type { ContentItem } from "./types";
 import { Loader2 } from "lucide-react";
 import { useAlert } from "./contexts/alertContext";
+import DependenciesModal from "./DependenciesModal";
+import ConfirmModal from "./ConfirmModal";
 
 type Props = {
   isOpen: boolean;
@@ -16,7 +18,17 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
   const [isLoadingInstances, setIsLoadingInstances] = useState(false);
   const [installingId, setInstallingId] = useState<string | null>(null);
 
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showDepsModal, setShowDepsModal] = useState(false);
+
   const { showAlert } = useAlert();
+
+  const [pendingInstall, setPendingInstall] = useState<{
+    instance: any;
+    version: any;
+    missingDependencies: any[];
+    existingFileName?: string;
+  } | null>(null);
 
   // Загружаем список сборок при открытии
   useEffect(() => {
@@ -45,15 +57,47 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
     };
   }, [isOpen]);
 
-  const handleSelectInstance = async (inst: any) => {
-    if (!item || installingId) return;
-
-    // Папка сборки (обычно inst.folderName или inst.id или inst.name)
+  const executeDownload = async (
+    inst: any,
+    targetVersion: any,
+    depsToInstall: string[] = [],
+  ) => {
+    if (!item) return;
     const folderName = inst.folderName || inst.id || inst.name;
     setInstallingId(folderName);
 
     try {
-      const res = await (window as any).modrinthAPI?.installToInstance?.({
+      const res = await (window as any).modrinthAPI?.installWithDependencies?.({
+        mainProject: { id: item.id, type: item.type, version: targetVersion },
+        dependencyProjectIds: depsToInstall,
+        instanceFolderName: folderName,
+        minecraftVersion: inst.minecraftVersion,
+        modloader: inst.modloader,
+      });
+
+      if (res?.success) {
+        showAlert(
+          `Successfully installed "${item.name}" to ${inst.name}!`,
+          "success",
+        );
+        setTimeout(() => onClose(), 1500);
+      }
+    } catch (err: any) {
+      showAlert("Failed to install to this instance", "error");
+    } finally {
+      setInstallingId(null);
+      setPendingInstall(null);
+    }
+  };
+
+  const handleSelectInstance = async (inst: any) => {
+    if (!item || installingId) return;
+
+    const folderName = inst.folderName || inst.id || inst.name;
+    setInstallingId(folderName);
+
+    try {
+      const check = await (window as any).modrinthAPI?.checkEligibility?.({
         projectId: item.id,
         projectType: item.type,
         instanceFolderName: folderName,
@@ -61,17 +105,64 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
         modloader: inst.modloader,
       });
 
-      if (res?.success) {
-        showAlert(`Successfully added "${item.name}" to ${inst.name}!`, "success");
-        setTimeout(() => {
-          onClose();
-        }, 1500);
+      setPendingInstall({
+        instance: inst,
+        version: check.version,
+        missingDependencies: check.missingDependencies || [],
+        existingFileName: check.existingFileName,
+      });
+
+      // 2. Если это дубликат — открываем модалку подтверждения
+      if (check.isDuplicate) {
+        setShowDuplicateModal(true);
+        return;
       }
+
+      // 3. Если есть зависимости — открываем модалку зависимостей
+      if (check.missingDependencies && check.missingDependencies.length > 0) {
+        setShowDepsModal(true);
+        return;
+      }
+
+      // 4. Если всё чисто — качаем сразу
+      await executeDownload(inst, check.version, []);
     } catch (err: any) {
-      showAlert(err.message || "Failed to install to this instance", "error");
+      showAlert("Compatibility check failed", "error");
     } finally {
       setInstallingId(null);
     }
+  };
+
+  const handleConfirmDuplicate = async () => {
+    if (!pendingInstall) return;
+    setShowDuplicateModal(false);
+
+    // После дубликата проверяем, есть ли зависимости
+    if (pendingInstall.missingDependencies.length > 0) {
+      setShowDepsModal(true);
+    } else {
+      await executeDownload(
+        pendingInstall.instance,
+        pendingInstall.version,
+        [],
+      );
+    }
+  };
+
+  // Выбор установки с зависимостями или без
+  const handleConfirmDependencies = async (withDeps: boolean) => {
+    if (!pendingInstall) return;
+    setShowDepsModal(false);
+
+    const depIds = withDeps
+      ? pendingInstall.missingDependencies.map((d: any) => d.id)
+      : [];
+
+    await executeDownload(
+      pendingInstall.instance,
+      pendingInstall.version,
+      depIds,
+    );
   };
 
   return (
@@ -115,6 +206,31 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={showDuplicateModal}
+        onClose={() => {
+          setShowDuplicateModal(false);
+          setPendingInstall(null);
+        }}
+        onConfirm={handleConfirmDuplicate}
+        title="Duplicate File"
+        warningText={`"${item?.name}" is already installed in this instance (${pendingInstall?.existingFileName}). Do you really want to download and overwrite it?`}
+        yesText="Cancel"
+        noText="Download anyway"
+        isDangerous={false}
+      />
+
+      {/* Модалка отсутствующих зависимостей */}
+      <DependenciesModal
+        isOpen={showDepsModal}
+        onClose={() => {
+          setShowDepsModal(false);
+          setPendingInstall(null);
+        }}
+        mainItemName={item?.name ?? "Mod"}
+        dependencies={pendingInstall?.missingDependencies ?? []}
+        onConfirmInstall={handleConfirmDependencies}
+      />
     </CustomModal>
   );
 }

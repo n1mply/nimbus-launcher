@@ -144,13 +144,18 @@ contextBridge.exposeInMainWorld("javaAPI", {
 });
 
 contextBridge.exposeInMainWorld("modrinthAPI", {
-  getCategories: (projectType: string) => ipcRenderer.invoke("modrinthAPI:getCategories", projectType),
-  searchProjects: (options: any) => ipcRenderer.invoke("modrinthAPI:searchProjects", options),
-  installToInstance: (options: any) => ipcRenderer.invoke("modrinthAPI:installToInstance", options),
-})
+  getCategories: (projectType: string) =>
+    ipcRenderer.invoke("modrinthAPI:getCategories", projectType),
+  searchProjects: (options: any) =>
+    ipcRenderer.invoke("modrinthAPI:searchProjects", options),
+  installToInstance: (options: any) =>
+    ipcRenderer.invoke("modrinthAPI:installToInstance", options),
+  checkEligibility: (opts: any) =>
+    ipcRenderer.invoke("modrinthAPI:checkEligibility", opts),
+  installWithDependencies: (opts: any) =>
+    ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts),
+});
 
 contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });
-
-

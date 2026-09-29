@@ -1,7 +1,14 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Instance } from "../types";
 import InstanceTile from "../InstanceTile";
-import { Plus, Search, PackageOpen, SearchX, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  PackageOpen,
+  SearchX,
+  Loader2,
+  Library,
+} from "lucide-react";
 import { LayoutGrid, List } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import AddInstanceModal from "../AddInstanceModal";
@@ -48,7 +55,7 @@ export default function InstancesPage() {
     };
 
     loadInstances();
-    
+
     window.addEventListener("instances:updated", loadInstances);
     return () => window.removeEventListener("instances:updated", loadInstances);
   }, []);
@@ -189,7 +196,10 @@ export default function InstancesPage() {
       {/* Шапка */}
       <div className="flex flex-row justify-between items-center">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[16px] font-medium">Instances</h1>
+          <div className="flex items-center gap-2">
+            <Library size={18} className="text-blue-400" />
+            <h1 className="text-[16px] font-medium">Instances</h1>
+          </div>
           <p className="text-[14px] text-gray-500">
             {isLoading
               ? "Loading instances..."
