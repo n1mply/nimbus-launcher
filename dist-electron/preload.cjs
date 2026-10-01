@@ -110,6 +110,9 @@ electron.contextBridge.exposeInMainWorld("modrinthAPI", {
   checkEligibility: (opts) => electron.ipcRenderer.invoke("modrinthAPI:checkEligibility", opts),
   installWithDependencies: (opts) => electron.ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts)
 });
+electron.contextBridge.exposeInMainWorld("worldsAPI", {
+  getByInstance: (instanceFolderName) => electron.ipcRenderer.invoke("worlds:getByInstance", instanceFolderName)
+});
 electron.contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file) => electron.webUtils.getPathForFile(file)
 });

@@ -67,6 +67,7 @@ export interface CheckEligibilityOptions {
   instanceFolderName: string;
   minecraftVersion: string;
   modloader?: string;
+  worldFolderName?: string;
 }
 
 export interface EligibilityResult {
@@ -212,10 +213,8 @@ export async function installModrinthProjectToInstance(
     modloader,
   } = options;
 
-  // Формируем фильтры для версий Modrinth
   const params = new URLSearchParams();
 
-  // Для модов строго указываем и лоадер, и версию игры
   if (projectType === "mod" && modloader && modloader !== "vanilla") {
     params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
   }
@@ -223,12 +222,10 @@ export async function installModrinthProjectToInstance(
     params.set("game_versions", JSON.stringify([minecraftVersion]));
   }
 
-  // 1. Ищем совместимые версии файла
   let versions = await modrinthFetch<any[]>(
     `/project/${projectId}/version?${params.toString()}`,
   );
 
-  // Если для ресурспака/шейдера нет точного совпадения по версии игры — берем последнюю доступную
   if (
     (!versions || versions.length === 0) &&
     (projectType === "resourcepack" || projectType === "shader")
@@ -242,7 +239,6 @@ export async function installModrinthProjectToInstance(
     );
   }
 
-  // 2. Берем самую свежую версию и её primary-файл
   const targetVersion = versions[0];
   const targetFile =
     targetVersion.files.find((f: any) => f.primary) || targetVersion.files[0];
@@ -260,7 +256,6 @@ export async function installModrinthProjectToInstance(
   const arrayBuffer = await response.arrayBuffer();
   const fileBuffer = Buffer.from(arrayBuffer);
 
-  // 4. Сохраняем файл на диск в папку сборки
   const saveResult = await saveContentToInstance(
     instanceFolderName,
     projectType,
@@ -288,17 +283,24 @@ export async function checkInstallationEligibility(
     instanceFolderName,
     minecraftVersion,
     modloader,
+    worldFolderName,
   } = opts;
 
-  // 1. Проверяем, установлен ли уже этот проект
   const installed = await getInstalledContent(instanceFolderName);
-  const existing = installed.find((r) => r.projectId === projectId);
+  const existing = installed.find((r) => {
+    if (projectType === "datapack") {
+      return r.projectId === projectId && r.worldFolderName === worldFolderName;
+    }
+    return r.projectId === projectId;
+  });
 
-  // 2. Получаем подходящую версию мода
   const params = new URLSearchParams();
   if (projectType === "mod" && modloader && modloader !== "vanilla") {
     params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
+  } else if (projectType === "datapack") {
+    params.set("loaders", JSON.stringify(["datapack"]));
   }
+
   if (minecraftVersion) {
     params.set("game_versions", JSON.stringify([minecraftVersion]));
   }
@@ -306,41 +308,30 @@ export async function checkInstallationEligibility(
   let versions = await modrinthFetch<any[]>(
     `/project/${projectId}/version?${params.toString()}`,
   );
-  if (
-    (!versions || versions.length === 0) &&
-    (projectType === "resourcepack" || projectType === "shader")
-  ) {
+
+  if ((!versions || versions.length === 0) && projectType !== "mod") {
     versions = await modrinthFetch<any[]>(`/project/${projectId}/version`);
   }
 
   if (!versions || versions.length === 0) {
-    throw new Error(
-      `No compatible version found for ${modloader ?? ""} ${minecraftVersion}`,
-    );
+    throw new Error(`No compatible version found for ${minecraftVersion}`);
   }
 
   const targetVersion = versions[0];
-
-  // 3. Проверяем зависимости (только для модов)
   const missingDeps: any[] = [];
+
   if (projectType === "mod" && Array.isArray(targetVersion.dependencies)) {
-    // Находим обязательные зависимости
     const requiredDeps = targetVersion.dependencies.filter(
       (d: any) => d.dependency_type === "required" && d.project_id,
     );
-
-    // Отсекаем те, что УЖЕ установлены в этой сборке
     const neededProjectIds = requiredDeps
       .map((d: any) => d.project_id)
       .filter((id: string) => !installed.some((inst) => inst.projectId === id));
 
-    // Если есть неустановленные зависимости — запрашиваем инфу о них пакетом
     if (neededProjectIds.length > 0) {
       const projects = await modrinthFetch<any[]>(
         `/projects?ids=${encodeURIComponent(JSON.stringify(neededProjectIds))}`,
       );
-
-      // Преобразуем в ContentItem для карточек
       for (const p of projects) {
         missingDeps.push({
           id: p.id,
@@ -413,6 +404,7 @@ export async function installWithDependencies(opts: {
   instanceFolderName: string;
   minecraftVersion: string;
   modloader?: string;
+  worldFolderName?: string;
 }) {
   const {
     mainProject,
@@ -420,22 +412,13 @@ export async function installWithDependencies(opts: {
     instanceFolderName,
     minecraftVersion,
     modloader,
+    worldFolderName,
   } = opts;
 
-  // 1. Сначала скачиваем зависимости
   if (dependencyProjectIds && dependencyProjectIds.length > 0) {
     for (const depId of dependencyProjectIds) {
       try {
-        const params = new URLSearchParams();
-        if (modloader && modloader !== "vanilla") {
-          params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
-        }
-        if (minecraftVersion) {
-          params.set("game_versions", JSON.stringify([minecraftVersion]));
-        }
-        const vers = await modrinthFetch<any[]>(
-          `/project/${depId}/version?${params.toString()}`,
-        );
+        const vers = await modrinthFetch<any[]>(`/project/${depId}/version`);
         if (vers && vers.length > 0) {
           await downloadAndSaveSingleProject(
             depId,
@@ -450,15 +433,35 @@ export async function installWithDependencies(opts: {
     }
   }
 
-  // 2. Скачиваем целевой мод
-  const fileName = await downloadAndSaveSingleProject(
-    mainProject.id,
-    mainProject.type,
+  const file =
+    mainProject.version.files.find((f: any) => f.primary) ||
+    mainProject.version.files[0];
+  if (!file?.url) throw new Error("No downloadable file");
+
+  const response = await fetch(file.url, { headers: modrinthHeaders() });
+  if (!response.ok) throw new Error(`Download failed: ${response.statusText}`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const res = await saveContentToInstance(
     instanceFolderName,
-    mainProject.version,
+    mainProject.type,
+    file.filename,
+    buffer,
+    worldFolderName,
   );
 
-  return { success: true, fileName };
+  if (!res.success) throw new Error(res.error);
+
+  await recordInstalledContent(instanceFolderName, {
+    projectId: mainProject.id,
+    projectType: mainProject.type,
+    versionId: mainProject.version.id,
+    fileName: file.filename,
+    installedAt: Date.now(),
+    worldFolderName,
+  });
+
+  return { success: true, fileName: file.filename };
 }
 
 export function registerModrinthHandlers(): void {

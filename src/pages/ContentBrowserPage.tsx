@@ -79,7 +79,7 @@ export default function ContentBrowserPage({
 
   const handleAddClick = (item: ContentItem) => {
     // Для модпаков и датапаков пока оставляем пустым по твоему условию:
-    if (item.type === "modpack" || item.type === "datapack") {
+    if (item.type === "modpack") {
       return;
     }
 

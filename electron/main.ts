@@ -18,6 +18,7 @@ import { registerFolderHandlers } from "./folderActions";
 import { registerDownloadActions } from "./downloadActions";
 import { registerLaunchHandlers } from "./launchService";
 import { registerModrinthHandlers } from "./modrinthActions";
+import { registerWorldHandlers } from "./worlds";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const require = createRequire(import.meta.url);
@@ -133,6 +134,7 @@ app.whenReady().then(() => {
   registerVersionsHandlers();
   registerFolderHandlers();
   registerModrinthHandlers();
+  registerWorldHandlers();
 
   createWindow();
 });

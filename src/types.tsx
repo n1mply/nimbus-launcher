@@ -132,3 +132,18 @@ export function formatRelativeTime(iso: string): string {
   const years = Math.round(days / 365);
   return `${years} year${years > 1 ? "s" : ""} ago`;
 }
+
+
+export type GameMode = "survival" | "creative" | "adventure" | "spectator" | "hardcore";
+export type WorldDifficulty = "peaceful" | "easy" | "normal" | "hard";
+
+export interface World {
+  folderName: string;
+  name: string;
+  instanceFolderName: string;
+  gameMode: GameMode;
+  difficulty: WorldDifficulty;
+  lastPlayed?: number;
+  iconPath?: string | null;
+  versionName?: string;
+}

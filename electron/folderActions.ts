@@ -12,15 +12,20 @@ export interface InstalledContentRecord {
   versionId?: string;
   fileName: string;
   installedAt: number;
+  worldFolderName?: string;
 }
 
-export async function getInstalledContent(folderName: string): Promise<InstalledContentRecord[]> {
-  const instancePath = path.join(app.getPath("userData"), "instances", folderName);
+export async function getInstalledContent(
+  folderName: string,
+): Promise<InstalledContentRecord[]> {
+  const instancePath = path.join(
+    app.getPath("userData"),
+    "instances",
+    folderName,
+  );
   const manifestPath = path.join(instancePath, "installed_content.json");
 
-  if (!existsSync(manifestPath)) {
-    return [];
-  }
+  if (!existsSync(manifestPath)) return [];
 
   try {
     const raw = await fs.readFile(manifestPath, "utf-8");
@@ -28,14 +33,35 @@ export async function getInstalledContent(folderName: string): Promise<Installed
 
     const validRecords: InstalledContentRecord[] = [];
     for (const rec of records) {
-      let sub = "mods";
-      if (rec.projectType === "resourcepack") sub = "resourcepacks";
-      if (rec.projectType === "shader") sub = "shaderpacks";
-
-      const filePath = path.join(instancePath, "minecraft", sub, rec.fileName);
-      if (existsSync(filePath)) {
-        validRecords.push(rec);
+      let filePath = "";
+      if (rec.projectType === "resourcepack") {
+        filePath = path.join(
+          instancePath,
+          "minecraft",
+          "resourcepacks",
+          rec.fileName,
+        );
+      } else if (rec.projectType === "shader") {
+        filePath = path.join(
+          instancePath,
+          "minecraft",
+          "shaderpacks",
+          rec.fileName,
+        );
+      } else if (rec.projectType === "datapack" && rec.worldFolderName) {
+        filePath = path.join(
+          instancePath,
+          "minecraft",
+          "saves",
+          rec.worldFolderName,
+          "datapacks",
+          rec.fileName,
+        );
+      } else {
+        filePath = path.join(instancePath, "minecraft", "mods", rec.fileName);
       }
+
+      if (existsSync(filePath)) validRecords.push(rec);
     }
 
     return validRecords;
@@ -46,14 +72,25 @@ export async function getInstalledContent(folderName: string): Promise<Installed
 
 export async function recordInstalledContent(
   folderName: string,
-  record: InstalledContentRecord
+  record: InstalledContentRecord,
 ): Promise<void> {
-  const instancePath = path.join(app.getPath("userData"), "instances", folderName);
+  const instancePath = path.join(
+    app.getPath("userData"),
+    "instances",
+    folderName,
+  );
   const manifestPath = path.join(instancePath, "installed_content.json");
 
   let list = await getInstalledContent(folderName);
-  // Убираем старую запись этого же проекта, если перезаписываем
-  list = list.filter((r) => r.projectId !== record.projectId);
+  list = list.filter((r) => {
+    if (record.projectType === "datapack") {
+      return !(
+        r.projectId === record.projectId &&
+        r.worldFolderName === record.worldFolderName
+      );
+    }
+    return r.projectId !== record.projectId;
+  });
   list.push(record);
 
   await fs.writeFile(manifestPath, JSON.stringify(list, null, 2), "utf-8");
@@ -63,34 +100,43 @@ export async function saveContentToInstance(
   folderName: string,
   type: string,
   fileName: string,
-  buffer: Buffer
+  buffer: Buffer,
+  worldFolderName?: string,
 ): Promise<{ success: boolean; filePath?: string; error?: string }> {
   try {
     const minecraftPath = path.join(
       app.getPath("userData"),
       "instances",
       folderName,
-      "minecraft"
+      "minecraft",
     );
 
-    let subFolder = "";
+    let targetDir = "";
     switch (type) {
       case "mod":
-        subFolder = "mods";
+        targetDir = path.join(minecraftPath, "mods");
         break;
       case "resourcepack":
-        subFolder = "resourcepacks";
+        targetDir = path.join(minecraftPath, "resourcepacks");
         break;
       case "shader":
-        subFolder = "shaderpacks";
+        targetDir = path.join(minecraftPath, "shaderpacks");
         break;
       case "datapack":
-        throw new Error("Datapacks installation requires a specific world");
+        if (!worldFolderName) {
+          throw new Error("Datapack installation requires a selected world");
+        }
+        targetDir = path.join(
+          minecraftPath,
+          "saves",
+          worldFolderName,
+          "datapacks",
+        );
+        break;
       default:
         throw new Error(`Unsupported content type: ${type}`);
     }
 
-    const targetDir = path.join(minecraftPath, subFolder);
     if (!existsSync(targetDir)) {
       await fs.mkdir(targetDir, { recursive: true });
     }
@@ -168,7 +214,7 @@ export function registerFolderHandlers() {
       }
     },
   );
-  
+
   ipcMain.handle("folder:openLatestLog", async (_, folderName: string) => {
     try {
       const logPath = path.join(

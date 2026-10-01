@@ -156,6 +156,11 @@ contextBridge.exposeInMainWorld("modrinthAPI", {
     ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts),
 });
 
+contextBridge.exposeInMainWorld("worldsAPI", {
+  getByInstance: (instanceFolderName: string) =>
+    ipcRenderer.invoke("worlds:getByInstance", instanceFolderName),
+});
+
 contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });
