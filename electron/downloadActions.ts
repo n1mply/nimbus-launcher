@@ -1,6 +1,11 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { IntegrityService } from "./integrityService";
 import { DownloadManager } from "./downloadManager";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { getInstanceDir } from "./instanceManager";
+import type { DownloadTask } from "../src/types";
 import { JavaService } from "./javaService";
 import {
   getMinecraftDir,
@@ -73,15 +78,44 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
           instance.modloaderVersion,
         );
 
+      let combinedQueue: DownloadTask[] = [...queue];
+      let combinedTotalBytes = totalBytesToDownload;
+
+      const instanceDir = getInstanceDir(instanceId);
+      const modpackTasksPath = path.join(instanceDir, "modpack_tasks.json");
+
+      if (fs.existsSync(modpackTasksPath)) {
+        try {
+          const rawTasks = await fsp.readFile(modpackTasksPath, "utf-8");
+          const modpackTasks: DownloadTask[] = JSON.parse(rawTasks);
+
+          for (const task of modpackTasks) {
+            let needDownload = true;
+            if (fs.existsSync(task.targetPath)) {
+              const stat = await fsp.stat(task.targetPath);
+              if (task.size > 0 && stat.size === task.size) {
+                needDownload = false;
+              }
+            }
+            if (needDownload) {
+              combinedQueue.push(task);
+              combinedTotalBytes += task.size || 0;
+            }
+          }
+        } catch (e) {
+          console.warn("[downloadActions] Failed to read modpack tasks:", e);
+        }
+      }
+
       // 3. Загрузка недостающих файлов
-      if (queue.length > 0) {
+      if (combinedQueue.length > 0) {
         await downloadManager.downloadQueue(
-          queue,
+          combinedQueue,
           (prog) => {
             const percent =
-              totalBytesToDownload > 0
+              combinedTotalBytes > 0
                 ? Math.round(
-                    25 + (prog.downloadedBytes / totalBytesToDownload) * 75,
+                    25 + (prog.downloadedBytes / combinedTotalBytes) * 74,
                   )
                 : 50;
 
@@ -90,11 +124,15 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
               statusText: `Downloading: ${prog.currentTaskName}`,
               progress: percent,
               downloadedBytes: prog.downloadedBytes,
-              totalBytes: totalBytesToDownload,
+              totalBytes: combinedTotalBytes,
             });
           },
           abortController.signal,
         );
+      }
+      
+      if (fs.existsSync(modpackTasksPath)) {
+        await fsp.rm(modpackTasksPath, { force: true }).catch(() => {});
       }
 
       let launchVersionId = versionId;

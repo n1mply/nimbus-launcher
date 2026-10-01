@@ -108,7 +108,8 @@ electron.contextBridge.exposeInMainWorld("modrinthAPI", {
   searchProjects: (options) => electron.ipcRenderer.invoke("modrinthAPI:searchProjects", options),
   installToInstance: (options) => electron.ipcRenderer.invoke("modrinthAPI:installToInstance", options),
   checkEligibility: (opts) => electron.ipcRenderer.invoke("modrinthAPI:checkEligibility", opts),
-  installWithDependencies: (opts) => electron.ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts)
+  installWithDependencies: (opts) => electron.ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts),
+  installModpack: (options) => electron.ipcRenderer.invoke("modrinthAPI:installModpack", options)
 });
 electron.contextBridge.exposeInMainWorld("worldsAPI", {
   getByInstance: (instanceFolderName) => electron.ipcRenderer.invoke("worlds:getByInstance", instanceFolderName)

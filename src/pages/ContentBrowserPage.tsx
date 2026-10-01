@@ -7,6 +7,8 @@ import Pagination from "../Pagination";
 import type { ContentItem, ContentType } from "../types";
 import { useLauncher } from "../contexts/laucherContext";
 import AddToInstanceModal from "../AddToInstanceModal";
+import { useAlert } from "../contexts/alertContext";
+import InstallationModal from "../InstallationModal";
 
 type Props = {
   contentType: ContentType;
@@ -54,6 +56,7 @@ export default function ContentBrowserPage({
   addLabel,
 }: Props) {
   const { versions } = useLauncher();
+  const { showAlert } = useAlert();
 
   const versionOptions: CustomInputOption[] = useMemo(() => {
     return (versions ?? [])
@@ -77,9 +80,34 @@ export default function ContentBrowserPage({
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const handleAddClick = (item: ContentItem) => {
-    // Для модпаков и датапаков пока оставляем пустым по твоему условию:
+  const [installingModpackInstance, setInstallingModpackInstance] = useState<any | null
+  >(null);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
+
+  const handleAddClick = async (item: ContentItem) => {
     if (item.type === "modpack") {
+      if (isPreparing) return;
+      setIsPreparing(true);
+      showAlert(`Preparing "${item.name}"...`, "default");
+
+      try {
+        const inst = await (window as any).modrinthAPI?.installModpack?.({
+          projectId: item.id,
+          name: item.name,
+          iconUrl: item.iconUrl,
+        });
+
+        if (inst) {
+          setInstallingModpackInstance(inst);
+          setIsInstallModalOpen(true);
+        }
+      } catch (err: any) {
+        console.error("Modpack install error:", err);
+        showAlert(err.message || "Failed to install modpack", "error");
+      } finally {
+        setIsPreparing(false);
+      }
       return;
     }
 
@@ -284,7 +312,12 @@ export default function ContentBrowserPage({
         ) : (
           <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <ContentTile key={item.id} item={item} addLabel={addLabel} onAdd={handleAddClick}/>
+              <ContentTile
+                key={item.id}
+                item={item}
+                addLabel={addLabel}
+                onAdd={handleAddClick}
+              />
             ))}
           </div>
         )}
@@ -307,6 +340,20 @@ export default function ContentBrowserPage({
           setSelectedItem(null);
         }}
         item={selectedItem}
+      />
+      <InstallationModal
+        isOpen={isInstallModalOpen}
+        instance={installingModpackInstance}
+        onClose={() => {
+          setIsInstallModalOpen(false);
+          setInstallingModpackInstance(null);
+        }}
+        onSuccess={() => {
+          showAlert(
+            `"${installingModpackInstance?.name}" installed successfully!`,
+            "default",
+          );
+        }}
       />
     </div>
   );

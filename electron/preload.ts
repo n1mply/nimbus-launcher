@@ -154,6 +154,8 @@ contextBridge.exposeInMainWorld("modrinthAPI", {
     ipcRenderer.invoke("modrinthAPI:checkEligibility", opts),
   installWithDependencies: (opts: any) =>
     ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts),
+  installModpack: (options: any) =>
+    ipcRenderer.invoke("modrinthAPI:installModpack", options),
 });
 
 contextBridge.exposeInMainWorld("worldsAPI", {

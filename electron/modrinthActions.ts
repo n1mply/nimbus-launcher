@@ -8,6 +8,7 @@ import {
 } from "./folderActions";
 
 import type { ContentItem } from "../src/types";
+import { MrpackInstaller } from "./mrpackInstaller";
 
 const MODRINTH_API_BASE = "https://api.modrinth.com/v2";
 const USER_AGENT = "n1mply/nimbus-launcher/1.0.0 (n1mply.dev@gmail.com)";
@@ -465,6 +466,8 @@ export async function installWithDependencies(opts: {
 }
 
 export function registerModrinthHandlers(): void {
+  const mrpackInstaller = new MrpackInstaller();
+
   ipcMain.handle(
     "modrinthAPI:getCategories",
     async (_, projectType?: string) => {
@@ -499,4 +502,8 @@ export function registerModrinthHandlers(): void {
       return await installWithDependencies(opts);
     },
   );
+
+  ipcMain.handle("modrinthAPI:installModpack", async (_, options) => {
+    return await mrpackInstaller.prepareInstance(options);
+  });
 }
