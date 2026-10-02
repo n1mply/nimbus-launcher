@@ -1,4 +1,3 @@
-// Добавь/обнови импорт Box или аналогичной иконки для заглушки
 import { Download, Heart, Clock, ArrowUpRight, PlusCircle, Box } from "lucide-react";
 import type { ContentItem, ContentTag } from "./types";
 import { formatCount, formatRelativeTime } from "./types";

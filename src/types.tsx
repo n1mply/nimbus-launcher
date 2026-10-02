@@ -5,7 +5,8 @@ export type TabId =
   | "resourcepacks"
   | "shaders"
   | "datapacks"
-  | "settings";
+  | "settings"
+  | "contentView";
 
 export type Account = {
   uuid: string;

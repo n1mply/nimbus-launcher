@@ -1,4 +1,3 @@
-// mrpackInstaller.ts
 import path from "node:path";
 import fsp from "node:fs/promises";
 import { app } from "electron";

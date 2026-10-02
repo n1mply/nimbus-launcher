@@ -4,7 +4,7 @@ import type { TabId } from '../types'
 export type NavItem = {
   id: TabId
   name: string
-  icon: React.ReactNode
+  icon?: React.ReactNode
 }
 
 export const mainNavItems: NavItem[] = [
@@ -14,6 +14,7 @@ export const mainNavItems: NavItem[] = [
   { id: 'datapacks', name: 'Data Packs', icon: <FileText size={24} /> },
   { id: 'resourcepacks', name: 'Resourse Packs', icon: <Palette size={24} /> },
   { id: 'shaders', name: 'Shaders', icon: <Sparkle size={24} /> },
+  { id: 'contentView', name: ''},
 ]
 
 export const bottomNavItems: NavItem[] = [

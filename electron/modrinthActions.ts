@@ -1,4 +1,3 @@
-// modrinthActions.ts
 import { ipcMain } from "electron";
 import {
   saveContentToInstance,

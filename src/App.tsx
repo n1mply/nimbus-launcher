@@ -33,6 +33,8 @@ function renderPage(tab: TabId) {
       return <DataPacksPage />;
     case "settings":
       return <SettingsPage />;
+    case "contentView":
+      return 
   }
 }
 
