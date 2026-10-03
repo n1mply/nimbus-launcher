@@ -52,6 +52,7 @@ export default function ConfirmModal({
       size="small"
       closeOnEsc={false}
       closeOnOutsideClick={false}
+      isFlexible
     >
       <div className="flex flex-col gap-5 pt-1">
         <div

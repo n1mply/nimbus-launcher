@@ -4,21 +4,21 @@ import InstallationModal from "../InstallationModal";
 import { useAlert } from "../contexts/alertContext";
 import type { ContentItem } from "../types";
 
-
 export function useContentInstall(): {
-  install: (item: ContentItem) => Promise<void>;
+  install: (item: ContentItem, versionId?: string) => Promise<void>;
   modals: ReactNode;
 } {
   const { showAlert } = useAlert();
 
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>(undefined);
   const [showModal, setShowModal] = useState(false);
 
   const [installingModpackInstance, setInstallingModpackInstance] = useState<any | null>(null);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
 
-  const install = async (item: ContentItem) => {
+  const install = async (item: ContentItem, versionId?: string) => {
     if (item.type === "modpack") {
       if (isPreparing) return;
       setIsPreparing(true);
@@ -29,6 +29,7 @@ export function useContentInstall(): {
           projectId: item.id,
           name: item.name,
           iconUrl: item.iconUrl,
+          versionId,
         });
 
         if (inst) {
@@ -45,6 +46,7 @@ export function useContentInstall(): {
     }
 
     setSelectedItem(item);
+    setSelectedVersionId(versionId);
     setShowModal(true);
   };
 
@@ -55,8 +57,10 @@ export function useContentInstall(): {
         onClose={() => {
           setShowModal(false);
           setSelectedItem(null);
+          setSelectedVersionId(undefined);
         }}
         item={selectedItem}
+        versionId={selectedVersionId}
       />
       <InstallationModal
         isOpen={isInstallModalOpen}
@@ -68,6 +72,7 @@ export function useContentInstall(): {
         onSuccess={() => {
           showAlert(`"${installingModpackInstance?.name}" installed successfully!`, "default");
         }}
+        cancelDeleteMode="hard"
       />
     </>
   );

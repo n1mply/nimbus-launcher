@@ -13,24 +13,39 @@ export interface PrepareModpackOptions {
   projectId: string;
   name: string;
   iconUrl?: string | null;
+  versionId?: string | null;
 }
 
 export class MrpackInstaller {
   public async prepareInstance(options: PrepareModpackOptions): Promise<Instance> {
-    const { projectId, name, iconUrl } = options;
+    const { projectId, name, iconUrl, versionId } = options;
 
-    const versionsRes = await fetch(`${MODRINTH_API}/project/${projectId}/version`, {
-      headers: { "User-Agent": USER_AGENT },
-    });
-    if (!versionsRes.ok) {
-      throw new Error(`Failed to fetch modpack versions: ${versionsRes.statusText}`);
-    }
-    const versions = await versionsRes.json();
-    if (!Array.isArray(versions) || versions.length === 0) {
-      throw new Error("No versions available for this modpack");
-    }
+    let targetVersion: any;
+    if (versionId) {
+      const versionRes = await fetch(`${MODRINTH_API}/version/${encodeURIComponent(versionId)}`, {
+        headers: { "User-Agent": USER_AGENT },
+      });
+      if (!versionRes.ok) {
+        throw new Error(`Failed to fetch modpack version: ${versionRes.statusText}`);
+      }
+      targetVersion = await versionRes.json();
+      if (targetVersion.project_id !== projectId) {
+        throw new Error("This version does not belong to the selected modpack");
+      }
+    } else {
+      const versionsRes = await fetch(`${MODRINTH_API}/project/${projectId}/version`, {
+        headers: { "User-Agent": USER_AGENT },
+      });
+      if (!versionsRes.ok) {
+        throw new Error(`Failed to fetch modpack versions: ${versionsRes.statusText}`);
+      }
+      const versions = await versionsRes.json();
+      if (!Array.isArray(versions) || versions.length === 0) {
+        throw new Error("No versions available for this modpack");
+      }
 
-    const targetVersion = versions.find((v: any) => v.version_type === "release") || versions[0];
+      targetVersion = versions.find((v: any) => v.version_type === "release") || versions[0];
+    }
     const mrpackFile =
       targetVersion.files.find((f: any) => f.filename.endsWith(".mrpack") || f.primary) ||
       targetVersion.files[0];

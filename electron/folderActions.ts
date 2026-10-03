@@ -198,12 +198,22 @@ export function registerFolderHandlers() {
         if (mode === "soft") {
           // Удаляем только папку minecraft (файлы игры/моды/кэш загрузки)
           if (existsSync(minecraftPath)) {
-            await fs.rm(minecraftPath, { recursive: true, force: true });
+            await fs.rm(minecraftPath, {
+              recursive: true,
+              force: true,
+              maxRetries: 5,
+              retryDelay: 200,
+            });
           }
         } else if (mode === "hard") {
           // Полное удаление папки сборки вместе с instance.json
           if (existsSync(instancePath)) {
-            await fs.rm(instancePath, { recursive: true, force: true });
+            await fs.rm(instancePath, {
+              recursive: true,
+              force: true,
+              maxRetries: 5,
+              retryDelay: 200,
+            });
           }
         }
 

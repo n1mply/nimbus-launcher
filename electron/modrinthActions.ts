@@ -68,6 +68,7 @@ export interface CheckEligibilityOptions {
   minecraftVersion: string;
   modloader?: string;
   worldFolderName?: string;
+  versionId?: string;
 }
 
 export interface EligibilityResult {
@@ -75,6 +76,7 @@ export interface EligibilityResult {
   existingFileName?: string;
   version: any;
   missingDependencies: ContentItem[];
+  incompatibility?: string;
 }
 
 let categoriesCache: ModrinthCategory[] | null = null;
@@ -247,7 +249,6 @@ export async function installModrinthProjectToInstance(
     throw new Error("No downloadable file found in this version");
   }
 
-  // 3. Скачиваем файл в память
   const response = await fetch(targetFile.url, { headers: modrinthHeaders() });
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.statusText}`);
@@ -274,6 +275,47 @@ export async function installModrinthProjectToInstance(
   };
 }
 
+function describeIncompatibility(
+  version: any,
+  projectType: string,
+  minecraftVersion: string,
+  modloader?: string,
+): string | undefined {
+  const gameVersions: string[] = Array.isArray(version.game_versions)
+    ? version.game_versions
+    : [];
+  const loaders: string[] = Array.isArray(version.loaders)
+    ? version.loaders
+    : [];
+
+  const gameOk =
+    !minecraftVersion ||
+    gameVersions.length === 0 ||
+    gameVersions.includes(minecraftVersion);
+
+  // Загрузчик проверяем только у модов: у ресурспаков/шейдеров/датапаков
+  // в loaders лежат "minecraft", "iris", "datapack" и т.п.
+  let loaderOk = true;
+  const isLoaderChecked =
+    projectType === "mod" && !!modloader && modloader !== "vanilla";
+  if (isLoaderChecked && loaders.length > 0) {
+    // Quilt умеет загружать Fabric-моды
+    const accepted = modloader === "quilt" ? ["quilt", "fabric"] : [modloader!];
+    loaderOk = loaders.some((l) => accepted.includes(l));
+  }
+
+  if (gameOk && loaderOk) return undefined;
+
+  const gamePart = gameVersions.slice(-3).join(", ");
+  const filePart = isLoaderChecked
+    ? `Minecraft ${gamePart} (${loaders.join(", ")})`
+    : `Minecraft ${gamePart}`;
+  const instPart = isLoaderChecked
+    ? `${minecraftVersion} (${modloader})`
+    : minecraftVersion;
+  return `This file is built for ${filePart}, but the instance is ${instPart}.`;
+}
+
 export async function checkInstallationEligibility(
   opts: CheckEligibilityOptions,
 ): Promise<EligibilityResult> {
@@ -284,6 +326,7 @@ export async function checkInstallationEligibility(
     minecraftVersion,
     modloader,
     worldFolderName,
+    versionId,
   } = opts;
 
   const installed = await getInstalledContent(instanceFolderName);
@@ -294,30 +337,49 @@ export async function checkInstallationEligibility(
     return r.projectId === projectId;
   });
 
-  const params = new URLSearchParams();
-  if (projectType === "mod" && modloader && modloader !== "vanilla") {
-    params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
-  } else if (projectType === "datapack") {
-    params.set("loaders", JSON.stringify(["datapack"]));
+  let targetVersion: any;
+  let incompatibility: string | undefined;
+
+  if (versionId) {
+    targetVersion = await modrinthFetch<any>(
+      `/version/${encodeURIComponent(versionId)}`,
+    );
+    if (targetVersion.project_id !== projectId) {
+      throw new Error("This version does not belong to the selected project");
+    }
+    incompatibility = describeIncompatibility(
+      targetVersion,
+      projectType,
+      minecraftVersion,
+      modloader,
+    );
+  } else {
+    const params = new URLSearchParams();
+    if (projectType === "mod" && modloader && modloader !== "vanilla") {
+      params.set("loaders", JSON.stringify([modloader.toLowerCase()]));
+    } else if (projectType === "datapack") {
+      params.set("loaders", JSON.stringify(["datapack"]));
+    }
+
+    if (minecraftVersion) {
+      params.set("game_versions", JSON.stringify([minecraftVersion]));
+    }
+
+    let versions = await modrinthFetch<any[]>(
+      `/project/${projectId}/version?${params.toString()}`,
+    );
+
+    if ((!versions || versions.length === 0) && projectType !== "mod") {
+      versions = await modrinthFetch<any[]>(`/project/${projectId}/version`);
+    }
+
+    if (!versions || versions.length === 0) {
+      throw new Error(`No compatible version found for ${minecraftVersion}`);
+    }
+
+    targetVersion = versions[0];
   }
 
-  if (minecraftVersion) {
-    params.set("game_versions", JSON.stringify([minecraftVersion]));
-  }
-
-  let versions = await modrinthFetch<any[]>(
-    `/project/${projectId}/version?${params.toString()}`,
-  );
-
-  if ((!versions || versions.length === 0) && projectType !== "mod") {
-    versions = await modrinthFetch<any[]>(`/project/${projectId}/version`);
-  }
-
-  if (!versions || versions.length === 0) {
-    throw new Error(`No compatible version found for ${minecraftVersion}`);
-  }
-
-  const targetVersion = versions[0];
   const missingDeps: any[] = [];
 
   if (projectType === "mod" && Array.isArray(targetVersion.dependencies)) {
@@ -357,6 +419,7 @@ export async function checkInstallationEligibility(
     existingFileName: existing?.fileName,
     version: targetVersion,
     missingDependencies: missingDeps,
+    incompatibility,
   };
 }
 
@@ -538,7 +601,7 @@ export function registerModrinthHandlers(): void {
   ipcMain.handle("modrinthAPI:getProject", (_, id: string) =>
     getModrinthProject(id),
   );
-  
+
   ipcMain.handle("modrinthAPI:getProjectVersions", (_, id: string) =>
     getModrinthProjectVersions(id),
   );

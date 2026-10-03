@@ -77,7 +77,7 @@ export default function ContentViewPage({ item }: Props) {
       </button>
 
       <div className="shrink-0">
-        <ContentTile item={item} sizeType="large" onAdd={install} />
+        <ContentTile item={item} sizeType="large" onAdd={install} addLabel="Install"/>
       </div>
 
       <div className="inline-flex w-fit shrink-0 gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-1">
@@ -118,6 +118,7 @@ export default function ContentViewPage({ item }: Props) {
             versions={versions}
             isLoading={versionsLoading}
             error={versionsError}
+            onInstall={(versionId) => install(item, versionId)}
           />
         )}
       </div>

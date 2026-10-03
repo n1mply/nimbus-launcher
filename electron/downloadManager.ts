@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { DownloadTask } from '../src/types';
 
 export interface DownloadProgress {
@@ -9,6 +11,8 @@ export interface DownloadProgress {
   downloadedBytes: number;
   currentTaskName: string;
 }
+
+const ABORTED = 'DOWNLOAD_ABORTED';
 
 export class DownloadManager {
   private concurrency: number;
@@ -30,13 +34,16 @@ export class DownloadManager {
   }
 
   public async downloadFile(task: DownloadTask, signal?: AbortSignal): Promise<void> {
+    // Проверяем до mkdir: после отмены не воссоздаём только что удалённые папки
+    if (signal?.aborted) throw new Error(ABORTED);
+
     await fsp.mkdir(path.dirname(task.targetPath), { recursive: true });
     const tempPath = `${task.targetPath}.${Date.now()}.tmp`;
 
     let attempt = 0;
     while (attempt < this.maxRetries) {
       if (signal?.aborted) {
-        throw new Error('DOWNLOAD_ABORTED');
+        throw new Error(ABORTED);
       }
 
       attempt++;
@@ -46,38 +53,11 @@ export class DownloadManager {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        const fileStream = fs.createWriteStream(tempPath);
-        const { Readable } = await import('node:stream');
-        const readable = Readable.fromWeb(response.body as any);
-
-        await new Promise<void>((resolve, reject) => {
-          const onAbort = () => {
-            fileStream.destroy();
-            reject(new Error('DOWNLOAD_ABORTED'));
-          };
-
-          if (signal) {
-            signal.addEventListener('abort', onAbort, { once: true });
-          }
-
-          const cleanup = () => {
-            if (signal) {
-              signal.removeEventListener('abort', onAbort);
-            }
-          };
-
-          readable.pipe(fileStream);
-
-          fileStream.on('finish', () => {
-            cleanup();
-            resolve();
-          });
-
-          fileStream.on('error', (err) => {
-            cleanup();
-            reject(err);
-          });
-        });
+        await pipeline(
+          Readable.fromWeb(response.body as any),
+          fs.createWriteStream(tempPath),
+          { signal },
+        );
 
         // Проверка размера (если размер передан)
         if (task.size > 0) {
@@ -99,11 +79,11 @@ export class DownloadManager {
         await fsp.rename(tempPath, task.targetPath);
         return;
       } catch (err: any) {
-        if (fs.existsSync(tempPath)) {
-          await fsp.rm(tempPath, { force: true }).catch(() => {});
-        }
-        if (signal?.aborted || err.message === 'DOWNLOAD_ABORTED') {
-          throw new Error('DOWNLOAD_ABORTED');
+        await fsp
+          .rm(tempPath, { force: true, maxRetries: 3, retryDelay: 100 })
+          .catch(() => {});
+        if (signal?.aborted || err.message === ABORTED) {
+          throw new Error(ABORTED);
         }
         if (attempt >= this.maxRetries) {
           throw new Error(`Ошибка загрузки ${task.url}: ${err.message}`);
@@ -121,14 +101,20 @@ export class DownloadManager {
     const totalBytes = tasks.reduce((sum, t) => sum + (t.size || 0), 0);
     let downloadedBytes = 0;
     let index = 0;
+    let failed = false;
 
     const worker = async (): Promise<void> => {
-      while (index < tasks.length) {
-        if (signal?.aborted) throw new Error('DOWNLOAD_ABORTED');
+      while (index < tasks.length && !failed) {
+        if (signal?.aborted) throw new Error(ABORTED);
         const currentIndex = index++;
         const task = tasks[currentIndex];
 
-        await this.downloadFile(task, signal);
+        try {
+          await this.downloadFile(task, signal);
+        } catch (err) {
+          failed = true;
+          throw err;
+        }
 
         downloadedBytes += task.size || 0;
         if (onProgress) {
@@ -142,6 +128,20 @@ export class DownloadManager {
     };
 
     const workerCount = Math.min(this.concurrency, tasks.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    // allSettled вместо all: промис завершается, только когда ВСЕ воркеры реально
+    // остановились. Иначе после отмены вызывающий код (удаление папки инстанса)
+    // гонялся бы с ещё работающими загрузками и воссоздавал файлы.
+    const results = await Promise.allSettled(
+      Array.from({ length: workerCount }, () => worker()),
+    );
+
+    const rejected = results.filter(
+      (r): r is PromiseRejectedResult => r.status === 'rejected',
+    );
+    if (rejected.length > 0) {
+      const real = rejected.find((r) => (r.reason as Error)?.message !== ABORTED);
+      throw (real ?? rejected[0]).reason;
+    }
   }
 }

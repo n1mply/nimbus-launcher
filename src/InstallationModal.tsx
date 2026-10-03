@@ -6,14 +6,23 @@ import ConfirmModal from "./ConfirmModal";
 import { useAlert } from "./contexts/alertContext";
 import { Loader2, HardDrive, Wifi } from "lucide-react";
 
+type DeleteMode = "soft" | "hard";
+
 type Props = {
   isOpen: boolean;
   instance: Instance | null;
   onClose: () => void;
   onSuccess?: () => void;
+  cancelDeleteMode?: DeleteMode;
 };
 
-export default function InstallationModal({ isOpen, instance, onClose, onSuccess }: Props) {
+export default function InstallationModal({
+  isOpen,
+  instance,
+  onClose,
+  onSuccess,
+  cancelDeleteMode = "soft",
+}: Props) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [statusText, setStatusText] = useState("Preparing for installation...");
   const [progress, setProgress] = useState(0);
@@ -25,12 +34,17 @@ export default function InstallationModal({ isOpen, instance, onClose, onSuccess
   const lastBytesRef = useRef(0);
   const lastTimeRef = useRef(Date.now());
   const downloadedBytesRef = useRef(0);
+  const cancellingRef = useRef(false);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 MB";
     const mb = bytes / (1024 * 1024);
     return `${mb.toFixed(1)} MB`;
   };
+
+  useEffect(() => {
+    if (isOpen) cancellingRef.current = false;
+  }, [isOpen]);
 
   useEffect(() => {
     downloadedBytesRef.current = downloadedBytes;
@@ -67,6 +81,7 @@ export default function InstallationModal({ isOpen, instance, onClose, onSuccess
     const instanceId = instance.id || instance.name;
 
     const unsubProgress = (window as any).instanceAPI.onProgress((data: any) => {
+      if (cancellingRef.current) return;
       if (data.instanceId === instanceId) {
         if (data.statusText) setStatusText(data.statusText);
         if (data.progress !== undefined) setProgress(data.progress);
@@ -76,6 +91,7 @@ export default function InstallationModal({ isOpen, instance, onClose, onSuccess
     });
 
     const unsubComplete = (window as any).instanceAPI.onComplete((data: any) => {
+      if (cancellingRef.current) return;
       if (data.instanceId === instanceId) {
         showAlert("Installation complete!", "default");
         onSuccess?.();
@@ -84,6 +100,7 @@ export default function InstallationModal({ isOpen, instance, onClose, onSuccess
     });
 
     const unsubError = (window as any).instanceAPI.onError((data: any) => {
+      if (cancellingRef.current) return;
       if (data.instanceId === instanceId) {
         showAlert(`Installation error: ${data.error}`, "default");
         onClose();
@@ -103,13 +120,29 @@ export default function InstallationModal({ isOpen, instance, onClose, onSuccess
   }, [isOpen, instance]);
 
   const handleConfirmCancel = async () => {
+    if (cancellingRef.current) return; // защита от повторного клика
+    cancellingRef.current = true;
+
+    setShowConfirmModal(false);
+    setStatusText("Cancelling...");
+
     if (instance) {
       const folderName = instance.id || instance.name;
       try {
         await (window as any).instanceAPI.cancelInstall(folderName);
-        await (window as any).folderAPI.deleteInstanceFolder(folderName, "soft");
+        const res = await (window as any).folderAPI.deleteInstanceFolder(
+          folderName,
+          cancelDeleteMode,
+        );
+        if (res && res.success === false) {
+          console.error("Failed to delete instance folder:", res.error);
+          showAlert(`Could not remove installation files: ${res.error}`, "error");
+        }
       } catch (error) {
         console.error("Failed to cancel installation:", error);
+      } finally {
+        // Если страница инстансов уже смонтирована, она перечитает список
+        window.dispatchEvent(new Event("instances:updated"));
       }
     }
     setShowConfirmModal(false);

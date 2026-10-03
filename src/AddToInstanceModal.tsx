@@ -12,9 +12,22 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   item: ContentItem | null;
+  versionId?: string;
 };
 
-export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
+type PendingInstall = {
+  instance: any;
+  version: any;
+  missingDependencies: any[];
+  existingFileName?: string;
+  isDuplicate: boolean;
+  incompatibility?: string;
+  world?: World;
+};
+
+type Stage = "start" | "incompat" | "duplicate";
+
+export default function AddToInstanceModal({ isOpen, onClose, item, versionId }: Props) {
   const isDatapack = item?.type === "datapack";
 
   const [step, setStep] = useState<"instance" | "world">("instance");
@@ -27,18 +40,13 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
   const [isLoadingWorlds, setIsLoadingWorlds] = useState(false);
   const [installingId, setInstallingId] = useState<string | null>(null);
 
+  const [showIncompatModal, setShowIncompatModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showDepsModal, setShowDepsModal] = useState(false);
 
   const { showAlert } = useAlert();
 
-  const [pendingInstall, setPendingInstall] = useState<{
-    instance: any;
-    version: any;
-    missingDependencies: any[];
-    existingFileName?: string;
-    world?: World;
-  } | null>(null);
+  const [pendingInstall, setPendingInstall] = useState<PendingInstall | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -46,6 +54,7 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
       setSelectedInstance(null);
       setInstallingId(null);
       setPendingInstall(null);
+      setShowIncompatModal(false);
       setShowDuplicateModal(false);
       setShowDepsModal(false);
       return;
@@ -128,6 +137,23 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
     }
   };
 
+  // Определяет, какой шаг следующий; stage — откуда мы пришли
+  const nextStep = async (p: PendingInstall, stage: Stage) => {
+    if (stage === "start" && p.incompatibility) {
+      setShowIncompatModal(true);
+      return;
+    }
+    if (stage !== "duplicate" && p.isDuplicate) {
+      setShowDuplicateModal(true);
+      return;
+    }
+    if (p.missingDependencies.length > 0) {
+      setShowDepsModal(true);
+      return;
+    }
+    await executeDownload(p.instance, p.version, [], p.world);
+  };
+
   const handleSelectWorld = async (w: World) => {
     if (!item || !selectedInstance || installingId) return;
 
@@ -142,22 +168,21 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
         minecraftVersion: selectedInstance.minecraftVersion,
         modloader: selectedInstance.modloader,
         worldFolderName: w.folderName,
+        versionId,
       });
 
-      setPendingInstall({
+      const pending: PendingInstall = {
         instance: selectedInstance,
         version: check.version,
         missingDependencies: [],
         existingFileName: check.existingFileName,
+        isDuplicate: !!check.isDuplicate,
+        incompatibility: check.incompatibility,
         world: w,
-      });
+      };
+      setPendingInstall(pending);
 
-      if (check.isDuplicate) {
-        setShowDuplicateModal(true);
-        return;
-      }
-
-      await executeDownload(selectedInstance, check.version, [], w);
+      await nextStep(pending, "start");
     } catch (err: any) {
       showAlert(err.message || "Compatibility check failed", "error");
     } finally {
@@ -183,28 +208,20 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
         instanceFolderName: folderName,
         minecraftVersion: inst.minecraftVersion,
         modloader: inst.modloader,
+        versionId,
       });
 
-      setPendingInstall({
+      const pending: PendingInstall = {
         instance: inst,
         version: check.version,
         missingDependencies: check.missingDependencies || [],
         existingFileName: check.existingFileName,
-      });
+        isDuplicate: !!check.isDuplicate,
+        incompatibility: check.incompatibility,
+      };
+      setPendingInstall(pending);
 
-      // Дубликат файла
-      if (check.isDuplicate) {
-        setShowDuplicateModal(true);
-        return;
-      }
-
-      // Отсутствуют зависимости
-      if (check.missingDependencies && check.missingDependencies.length > 0) {
-        setShowDepsModal(true);
-        return;
-      }
-
-      await executeDownload(inst, check.version, []);
+      await nextStep(pending, "start");
     } catch (err: any) {
       showAlert(err.message || "Compatibility check failed", "error");
     } finally {
@@ -212,20 +229,16 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
     }
   };
 
+  const handleConfirmIncompat = async () => {
+    if (!pendingInstall) return;
+    setShowIncompatModal(false);
+    await nextStep(pendingInstall, "incompat");
+  };
+
   const handleConfirmDuplicate = async () => {
     if (!pendingInstall) return;
     setShowDuplicateModal(false);
-
-    if (pendingInstall.missingDependencies.length > 0) {
-      setShowDepsModal(true);
-    } else {
-      await executeDownload(
-        pendingInstall.instance,
-        pendingInstall.version,
-        [],
-        pendingInstall.world,
-      );
-    }
+    await nextStep(pendingInstall, "duplicate");
   };
 
   const handleConfirmDependencies = async (withDeps: boolean) => {
@@ -247,7 +260,7 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
   return (
     <>
       <CustomModal
-        isOpen={isOpen && !showDuplicateModal && !showDepsModal}
+        isOpen={isOpen && !showIncompatModal && !showDuplicateModal && !showDepsModal}
         onClose={onClose}
         title={
           step === "world"
@@ -338,6 +351,19 @@ export default function AddToInstanceModal({ isOpen, onClose, item }: Props) {
             ))}
         </div>
       </CustomModal>
+      <ConfirmModal
+        isOpen={showIncompatModal}
+        onClose={() => {
+          setShowIncompatModal(false);
+          setPendingInstall(null);
+        }}
+        onConfirm={handleConfirmIncompat}
+        title="Version mismatch"
+        warningText={`${pendingInstall?.incompatibility ?? ""} It may not work in this instance. Install anyway?`}
+        yesText="Cancel"
+        noText="Install anyway"
+        isDangerous
+      />
       <ConfirmModal
         isOpen={showDuplicateModal}
         onClose={() => {

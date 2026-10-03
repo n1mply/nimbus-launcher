@@ -15,7 +15,12 @@ import {
 } from "./instanceManager";
 import { LoaderInstaller } from "./loaderInstaller";
 
-const activeControllers = new Map<string, AbortController>();
+// controller нужен для abort; done резолвится, когда обработчик установки
+// ПОЛНОСТЬЮ завершился (все загрузки остановлены, статус записан)
+const activeInstalls = new Map<
+  string,
+  { controller: AbortController; done: Promise<void> }
+>();
 
 export function registerDownloadActions(mainWindow: BrowserWindow): void {
   const integrityService = new IntegrityService();
@@ -24,12 +29,20 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
   const javaService = new JavaService();
 
   ipcMain.handle("instance:install", async (_, instanceId: string) => {
-    if (activeControllers.has(instanceId)) {
+    if (activeInstalls.has(instanceId)) {
       throw new Error("Installation of this instance is already in progress");
     }
 
     const abortController = new AbortController();
-    activeControllers.set(instanceId, abortController);
+    let resolveDone!: () => void;
+    const done = new Promise<void>((resolve) => (resolveDone = resolve));
+    activeInstalls.set(instanceId, { controller: abortController, done });
+
+    // Точки отмены между этапами, которые сами сигнал не принимают
+    // (Java, анализ целостности, очистка)
+    const throwIfCancelled = () => {
+      if (abortController.signal.aborted) throw new Error("DOWNLOAD_ABORTED");
+    };
 
     try {
       await setInstanceStatus(instanceId, "installing");
@@ -61,6 +74,8 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
         });
       });
 
+      throwIfCancelled();
+
       // 2. Анализ целостности файлов
       mainWindow.webContents.send("download:progress", {
         instanceId,
@@ -77,6 +92,8 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
           instance.modloader,
           instance.modloaderVersion,
         );
+
+      throwIfCancelled();
 
       let combinedQueue: DownloadTask[] = [...queue];
       let combinedTotalBytes = totalBytesToDownload;
@@ -156,6 +173,8 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
         });
       }
 
+      throwIfCancelled();
+
       await writeInstance(instanceId, { modloaderVersion, launchVersionId });
 
       mainWindow.webContents.send("download:progress", {
@@ -179,14 +198,15 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
         console.warn("[Integrity] Cleanup skipped due to error:", e);
       }
 
-      await setInstanceStatus(instanceId, "installed");
-
+      throwIfCancelled();
       await setInstanceStatus(instanceId, "installed");
       mainWindow.webContents.send("download:complete", { instanceId });
       return { success: true };
     } catch (err: any) {
-      if (err.message === "DOWNLOAD_ABORTED") {
-        await setInstanceStatus(instanceId, "empty");
+      if (abortController.signal.aborted || err.message === "DOWNLOAD_ABORTED") {
+        if (fs.existsSync(path.join(getInstanceDir(instanceId), "instance.json"))) {
+          await setInstanceStatus(instanceId, "empty").catch(() => {});
+        }
         return { success: false, aborted: true };
       }
       await setInstanceStatus(instanceId, "crushed");
@@ -196,17 +216,17 @@ export function registerDownloadActions(mainWindow: BrowserWindow): void {
       });
       throw err;
     } finally {
-      activeControllers.delete(instanceId);
+      activeInstalls.delete(instanceId);
+      resolveDone();
     }
   });
 
   ipcMain.handle("instance:cancel-install", async (_, instanceId: string) => {
-    const controller = activeControllers.get(instanceId);
-    if (controller) {
-      controller.abort();
-      activeControllers.delete(instanceId);
-      return { success: true };
-    }
-    return { success: false };
+    const entry = activeInstalls.get(instanceId);
+    if (!entry) return { success: false };
+
+    entry.controller.abort();
+    await entry.done;
+    return { success: true };
   });
 }
