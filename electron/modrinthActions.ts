@@ -464,6 +464,35 @@ export async function installWithDependencies(opts: {
   return { success: true, fileName: file.filename };
 }
 
+export async function getModrinthProject(projectId: string) {
+  const p = await modrinthFetch<any>(
+    `/project/${encodeURIComponent(projectId)}`,
+  );
+  return {
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    body: p.body ?? "",
+    project_type: p.project_type,
+  };
+}
+
+export async function getModrinthProjectVersions(projectId: string) {
+  const versions = await modrinthFetch<any[]>(
+    `/project/${encodeURIComponent(projectId)}/version?include_changelog=false`,
+  );
+  return versions.map((v) => ({
+    id: v.id,
+    name: v.name,
+    version_number: v.version_number,
+    version_type: v.version_type,
+    game_versions: v.game_versions,
+    loaders: v.loaders,
+    date_published: v.date_published,
+    downloads: v.downloads,
+  }));
+}
+
 export function registerModrinthHandlers(): void {
   const mrpackInstaller = new MrpackInstaller();
 
@@ -505,4 +534,12 @@ export function registerModrinthHandlers(): void {
   ipcMain.handle("modrinthAPI:installModpack", async (_, options) => {
     return await mrpackInstaller.prepareInstance(options);
   });
+
+  ipcMain.handle("modrinthAPI:getProject", (_, id: string) =>
+    getModrinthProject(id),
+  );
+  
+  ipcMain.handle("modrinthAPI:getProjectVersions", (_, id: string) =>
+    getModrinthProjectVersions(id),
+  );
 }

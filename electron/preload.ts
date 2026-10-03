@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 console.log(">>> PRELOAD STARTED");
 import { ipcRenderer, contextBridge } from "electron";
 import { UpdateInstanceSettingsPayload } from "./instances";
@@ -156,6 +157,9 @@ contextBridge.exposeInMainWorld("modrinthAPI", {
     ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts),
   installModpack: (options: any) =>
     ipcRenderer.invoke("modrinthAPI:installModpack", options),
+  getProject: (id: string) => ipcRenderer.invoke("modrinthAPI:getProject", id),
+  getProjectVersions: (id: string) =>
+    ipcRenderer.invoke("modrinthAPI:getProjectVersions", id),
 });
 
 contextBridge.exposeInMainWorld("worldsAPI", {
@@ -165,4 +169,8 @@ contextBridge.exposeInMainWorld("worldsAPI", {
 
 contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
+});
+
+contextBridge.exposeInMainWorld("appAPI", {
+  openExternal: (url: string) => ipcRenderer.invoke("app:openExternal", url),
 });

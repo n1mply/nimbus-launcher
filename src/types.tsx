@@ -101,18 +101,20 @@ export interface ContentTag {
 
 export interface ContentItem {
   id: string;
-  source: ContentSource;
+  source?: ContentSource;
   type: ContentType;
   name: string;
   author: string;
   authorUrl?: string;
   summary: string;
-  iconUrl: string;
+  iconUrl?: string | null;
   iconBg: string;
   downloads: number;
   follows: number;
-  updatedAt: string; // ISO
+  updatedAt: string;
   tags: ContentTag[];
+  slug?: string;
+  iconBg?: string;  
 }
 
 export function formatCount(n: number): string {
@@ -147,4 +149,23 @@ export interface World {
   lastPlayed?: number;
   iconPath?: string | null;
   versionName?: string;
+}
+
+export interface ModrinthProjectDetails {
+  id: string;
+  slug: string;
+  title: string;
+  body: string;
+  project_type: string;
+}
+ 
+export interface ModrinthVersionSummary {
+  id: string;
+  name: string;
+  version_number: string;
+  version_type: "release" | "beta" | "alpha";
+  game_versions: string[];
+  loaders: string[];
+  date_published: string;
+  downloads: number;
 }

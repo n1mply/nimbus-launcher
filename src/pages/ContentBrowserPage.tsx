@@ -6,9 +6,8 @@ import CustomInput, { type CustomInputOption } from "../CustomInput";
 import Pagination from "../Pagination";
 import type { ContentItem, ContentType } from "../types";
 import { useLauncher } from "../contexts/laucherContext";
-import AddToInstanceModal from "../AddToInstanceModal";
-import { useAlert } from "../contexts/alertContext";
-import InstallationModal from "../InstallationModal";
+import { useTab } from "../contexts/tabContext";
+import { useContentInstall } from "../hooks/useContentInstall";
 
 type Props = {
   contentType: ContentType;
@@ -56,7 +55,9 @@ export default function ContentBrowserPage({
   addLabel,
 }: Props) {
   const { versions } = useLauncher();
-  const { showAlert } = useAlert();
+  const { openContent } = useTab();
+  // Вся логика «Add to instance» (модпаки, модалки) теперь в хуке
+  const { install, modals } = useContentInstall();
 
   const versionOptions: CustomInputOption[] = useMemo(() => {
     return (versions ?? [])
@@ -76,45 +77,6 @@ export default function ContentBrowserPage({
   const [totalHits, setTotalHits] = useState(0);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-
-  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
-  const [showModal, setShowModal] = useState(false);
-
-  const [installingModpackInstance, setInstallingModpackInstance] = useState<any | null
-  >(null);
-  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [isPreparing, setIsPreparing] = useState(false);
-
-  const handleAddClick = async (item: ContentItem) => {
-    if (item.type === "modpack") {
-      if (isPreparing) return;
-      setIsPreparing(true);
-      showAlert(`Preparing "${item.name}"...`, "default");
-
-      try {
-        const inst = await (window as any).modrinthAPI?.installModpack?.({
-          projectId: item.id,
-          name: item.name,
-          iconUrl: item.iconUrl,
-        });
-
-        if (inst) {
-          setInstallingModpackInstance(inst);
-          setIsInstallModalOpen(true);
-        }
-      } catch (err: any) {
-        console.error("Modpack install error:", err);
-        showAlert(err.message || "Failed to install modpack", "error");
-      } finally {
-        setIsPreparing(false);
-      }
-      return;
-    }
-
-    // Для модов, ресурспаков и шейдеров открываем модалку:
-    setSelectedItem(item);
-    setShowModal(true);
-  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -191,6 +153,8 @@ export default function ContentBrowserPage({
 
           return {
             id: hit.project_id,
+            slug: hit.slug, // нужен для ссылки на страницу версии
+            source: "modrinth",
             name: hit.title,
             author: hit.author,
             summary: hit.description,
@@ -316,14 +280,14 @@ export default function ContentBrowserPage({
                 key={item.id}
                 item={item}
                 addLabel={addLabel}
-                onAdd={handleAddClick}
+                onAdd={install}
+                onOpen={openContent}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Пагинация внизу страницы */}
       {totalPages > 1 && (
         <div className="shrink-0 border-t border-white/5 pt-2">
           <Pagination
@@ -333,28 +297,8 @@ export default function ContentBrowserPage({
           />
         </div>
       )}
-      <AddToInstanceModal
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setSelectedItem(null);
-        }}
-        item={selectedItem}
-      />
-      <InstallationModal
-        isOpen={isInstallModalOpen}
-        instance={installingModpackInstance}
-        onClose={() => {
-          setIsInstallModalOpen(false);
-          setInstallingModpackInstance(null);
-        }}
-        onSuccess={() => {
-          showAlert(
-            `"${installingModpackInstance?.name}" installed successfully!`,
-            "default",
-          );
-        }}
-      />
+
+      {modals}
     </div>
   );
 }

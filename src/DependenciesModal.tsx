@@ -60,7 +60,7 @@ export default function DependenciesModal({
         {/* Список зависимостей */}
         <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
           {dependencies.map((dep) => (
-            <ContentTile key={dep.id} item={dep} isCompact/>
+            <ContentTile key={dep.id} item={dep} sizeType="compact"/>
           ))}
         </div>
 

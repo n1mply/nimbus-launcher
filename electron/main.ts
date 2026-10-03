@@ -19,6 +19,7 @@ import { registerDownloadActions } from "./downloadActions";
 import { registerLaunchHandlers } from "./launchService";
 import { registerModrinthHandlers } from "./modrinthActions";
 import { registerWorldHandlers } from "./worlds";
+import { registerExternalIpc, attachExternalLinkGuards } from "./externalLinks";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const require = createRequire(import.meta.url);
@@ -53,6 +54,7 @@ function createWindow(): void {
   });
 
   setAuthMainWindow(win);
+  attachExternalLinkGuards(win);
 
   // Регистрируем сервисы, требующие ссылку на окно для отправки IPC-событий в UI
   registerDownloadActions(win);
@@ -135,6 +137,7 @@ app.whenReady().then(() => {
   registerFolderHandlers();
   registerModrinthHandlers();
   registerWorldHandlers();
+  registerExternalIpc();
 
   createWindow();
 });

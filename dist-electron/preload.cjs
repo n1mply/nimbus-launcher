@@ -109,11 +109,16 @@ electron.contextBridge.exposeInMainWorld("modrinthAPI", {
   installToInstance: (options) => electron.ipcRenderer.invoke("modrinthAPI:installToInstance", options),
   checkEligibility: (opts) => electron.ipcRenderer.invoke("modrinthAPI:checkEligibility", opts),
   installWithDependencies: (opts) => electron.ipcRenderer.invoke("modrinthAPI:installWithDependencies", opts),
-  installModpack: (options) => electron.ipcRenderer.invoke("modrinthAPI:installModpack", options)
+  installModpack: (options) => electron.ipcRenderer.invoke("modrinthAPI:installModpack", options),
+  getProject: (id) => electron.ipcRenderer.invoke("modrinthAPI:getProject", id),
+  getProjectVersions: (id) => electron.ipcRenderer.invoke("modrinthAPI:getProjectVersions", id)
 });
 electron.contextBridge.exposeInMainWorld("worldsAPI", {
   getByInstance: (instanceFolderName) => electron.ipcRenderer.invoke("worlds:getByInstance", instanceFolderName)
 });
 electron.contextBridge.exposeInMainWorld("webUtilsAPI", {
   getPathForFile: (file) => electron.webUtils.getPathForFile(file)
+});
+electron.contextBridge.exposeInMainWorld("appAPI", {
+  openExternal: (url) => electron.ipcRenderer.invoke("app:openExternal", url)
 });
