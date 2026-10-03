@@ -25,38 +25,24 @@ function getAuthCacheDir(): string {
   return path.join(app.getPath("userData"), "auth-cache");
 }
 
-// Единая точка создания Authflow — используется и для полноценного логина,
-// и там, где нужен просто актуальный токен (например, при аплоаде скина).
-// Параметры (username + cacheDir) те же самые, поэтому prismarine-auth
-// подхватывает уже существующую сессию с диска и тихо обновляет токен,
-// не требуя повторного входа, пока жив refresh-токен.
-function createAuthflow(
-  onDeviceCode?: (deviceCode: {
-    user_code: string;
-    verification_uri: string;
-  }) => void,
-): Authflow {
+const AZURE_CLIENT_ID = "0ce42578-8d8a-4f95-9697-9f8fde30adda";
+
+function createAuthflow(onDeviceCode?: (code: any) => void): Authflow {
   return new Authflow(
     "nimbus-launcher-user",
     getAuthCacheDir(),
     {
-      flow: "live",
-      authTitle: Titles.MinecraftNintendoSwitch,
-      deviceType: "Nintendo",
+      flow: "msal",
+      authTitle: AZURE_CLIENT_ID,
     },
     onDeviceCode,
   );
 }
 
-// Коллбэк, который показывает модалку с device-code — переиспользуется
-// везде, где может понадобиться тихая переавторизация без полноценного логина.
-function notifyDeviceCode(deviceCode: {
-  user_code: string;
-  verification_uri: string;
-}): void {
+function notifyDeviceCode(dc: any): void {
   mainWindowRef?.webContents.send("auth:device-code", {
-    code: deviceCode.user_code,
-    url: deviceCode.verification_uri,
+    code: dc.userCode ?? dc.user_code,
+    url: dc.verificationUri ?? dc.verification_uri,
   });
 }
 
