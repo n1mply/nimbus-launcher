@@ -4,7 +4,6 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { Cape } from "../src/types";
 
-
 declare module "prismarine-auth" {
   interface MicrosoftAuthFlowOptions {
     doSisuAuth?: boolean;
@@ -57,7 +56,7 @@ let sharedFlow: Authflow | null = null;
 
 function getSharedAuthflow(): Authflow {
   if (!sharedFlow) {
-    sharedFlow = createAuthflow(notifyDeviceCode);
+    sharedFlow = createAuthflow();
   }
   return sharedFlow;
 }
@@ -157,29 +156,47 @@ async function downloadAndSaveSkin(
 // showDeviceCodeUI=false используется при тихом восстановлении сессии при старте
 // приложения — если токен протух и нужен новый вход, мы не показываем модалку
 // сами по себе, а просто сообщаем "нужен логин" и даём пользователю нажать кнопку сам.
+
 function loginWithPrismarine(showDeviceCodeUI: boolean) {
   return new Promise<any>((resolve, reject) => {
-    let codeWasShown = false;
+    let isSettled = false;
+    let canShowDeviceCode = showDeviceCodeUI;
+
+    const settleError = (error: unknown) => {
+      if (isSettled) return;
+
+      isSettled = true;
+      canShowDeviceCode = false;
+      reject(error);
+    };
 
     const flow = createAuthflow((deviceCode) => {
-      codeWasShown = true;
+      if (isSettled) return;
+
       if (!showDeviceCodeUI) {
-        reject(new Error("AUTH_REQUIRED"));
+        settleError(new Error("AUTH_REQUIRED"));
         return;
       }
+
+      if (!canShowDeviceCode) return;
+
       notifyDeviceCode(deviceCode);
     });
 
     flow
       .getMinecraftJavaToken({ fetchProfile: true })
       .then((result) => {
-        // Переиспользуем этот же инстанс дальше — он уже прошёл полную
-        // цепочку авторизации, не нужно создавать новый для скинов/плащей.
+        if (isSettled) return;
+
+        canShowDeviceCode = false;
+        isSettled = true;
+
         sharedFlow = flow;
+
         resolve(result);
       })
       .catch((err) => {
-        if (!codeWasShown) reject(err);
+        settleError(err);
       });
   });
 }

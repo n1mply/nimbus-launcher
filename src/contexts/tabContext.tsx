@@ -11,14 +11,10 @@ import type { ContentItem, TabId } from "../types";
 
 type TabContextValue = {
   activeTab: TabId;
-  /** Какая вкладка подсвечена в сайдбаре (для contentView — та, откуда пришли) */
   sidebarTab: TabId;
   setActiveTab: (tab: TabId) => void;
-
-  /** Контент, открытый на странице подробного просмотра */
   selectedContent: ContentItem | null;
   openContent: (item: ContentItem) => void;
-  /** Вернуться на вкладку, с которой открыли контент */
   closeContent: () => void;
 };
 

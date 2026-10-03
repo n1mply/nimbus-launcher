@@ -1,13 +1,13 @@
-
-import { useCallback, useEffect, useState } from 'react'
-import QRCode from 'qrcode'
-import CustomModal from './CustomModal'
-import { MorphIcon } from 'morphicons/react'
-import { Clipboard, Check } from 'lucide'
-import { useAlert } from './contexts/alertContext'
+import { useCallback, useEffect, useState } from "react";
+import QRCode from "qrcode";
+import CustomModal from "./CustomModal";
+import { MorphIcon } from "morphicons/react";
+import { Clipboard, Check } from "lucide";
+import { useAlert } from "./contexts/alertContext";
 
 interface DeviceCodeModalProps {
   isOpen: boolean;
+  isLoggingIn: boolean;
   onOpen: () => void;
   onClose: () => void;
 }
@@ -16,98 +16,91 @@ export default function DeviceCodeModal({
   isOpen,
   onOpen,
   onClose,
+  isLoggingIn,
 }: DeviceCodeModalProps) {
   const [deviceCode, setDeviceCode] = useState<{
-    code: string
-    url: string
-  } | null>(null)
+    code: string;
+    url: string;
+  } | null>(null);
 
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
-  const [isCopied, setIsCopied] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
-  const { showAlert } = useAlert()
+  const { showAlert } = useAlert();
 
-  // Получение device code из Electron
   useEffect(() => {
-    const handler = (
-      _event: unknown,
-      data: { code: string; url: string }
-    ) => {
-      setDeviceCode(data)
-      onOpen()
-    }
+    const handler = (_event: any, data: any) => {
+      if (!isLoggingIn) return;
+      setDeviceCode(data);
+      onOpen();
+    };
 
-    window.ipcRenderer.on('auth:device-code', handler)
+    window.ipcRenderer.on("auth:device-code", handler);
 
     return () => {
-      window.ipcRenderer.off('auth:device-code', handler)
-    }
-  }, [onOpen])
+      window.ipcRenderer.off("auth:device-code", handler);
+    };
+  }, [onOpen, isLoggingIn]);
 
-  // Генерация QR-кода
   useEffect(() => {
     if (!deviceCode) {
-      setQrDataUrl(null)
-      setIsCopied(false)
-      return
+      setQrDataUrl(null);
+      setIsCopied(false);
+      return;
     }
 
-    const prefilledUrl = new URL(deviceCode.url)
-    prefilledUrl.searchParams.set('otc', deviceCode.code)
+    let isActive = true;
 
-    let isActive = true
-
-    QRCode.toDataURL(prefilledUrl.toString(), {
+    QRCode.toDataURL(deviceCode.url, {
       width: 160,
       margin: 1,
-    }).then((dataUrl) => {
-      if (isActive) {
-        setQrDataUrl(dataUrl)
-      }
-    }).catch((error) => {
-      console.error('QR generation error:', error)
-      showAlert('Failed to generate QR code', 'error')
     })
+      .then((dataUrl) => {
+        if (isActive) {
+          setQrDataUrl(dataUrl);
+        }
+      })
+      .catch((error) => {
+        console.error("QR generation error:", error);
+        showAlert("Failed to generate QR code", "error");
+      });
 
     return () => {
-      isActive = false
-    }
-  }, [deviceCode, showAlert])
+      isActive = false;
+    };
+  }, [deviceCode, showAlert]);
 
   const handleClose = useCallback(() => {
-    setDeviceCode(null)
-    setQrDataUrl(null)
-    setIsCopied(false)
-    onClose()
-  }, [onClose])
+    setDeviceCode(null);
+    setQrDataUrl(null);
+    setIsCopied(false);
+    onClose();
+  }, [onClose]);
 
   const handleOpenLink = () => {
-    if (!deviceCode) return
+    if (!deviceCode) return;
 
-    window.ipcRenderer.invoke(
-      'shell:open-external',
-      deviceCode.url
-    )
-  }
+    window.ipcRenderer.invoke("shell:open-external", deviceCode.url);
+  };
 
   const handleCopy = async () => {
-    if (!deviceCode) return
+    if (!deviceCode) return;
 
     try {
-      await navigator.clipboard.writeText(deviceCode.code)
+      await navigator.clipboard.writeText(deviceCode.code);
 
-      setIsCopied(true)
+      setIsCopied(true);
 
-      showAlert('Text was copied!', 'success')
+      showAlert("Text was copied!", "success");
 
       setTimeout(() => {
-        setIsCopied(false)
-      }, 2500)
+        setIsCopied(false);
+      }, 2500);
     } catch (error) {
-      console.error('Clipboard error:', error)
-      showAlert('Error copying the text', 'error')
+      console.error("Clipboard error:", error);
+      showAlert("Error copying the text", "error");
     }
-  }
+  };
 
   return (
     <CustomModal
@@ -117,7 +110,6 @@ export default function DeviceCodeModal({
       title="Login to your account"
     >
       <div className="flex flex-col items-center gap-3 text-center">
-
         <p className="text-sm text-gray-400">
           Enter this code at the link below or scan the QR code.
         </p>
@@ -159,8 +151,7 @@ export default function DeviceCodeModal({
         >
           {deviceCode?.url}
         </button>
-
       </div>
     </CustomModal>
-  )
+  );
 }

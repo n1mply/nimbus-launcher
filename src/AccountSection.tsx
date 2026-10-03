@@ -203,7 +203,10 @@ export default function AccountSection() {
     }
   }, [account]);
 
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const handleLogin = async () => {
+    setIsLoggingIn(true);
     try {
       const result = await window.auth.login();
 
@@ -226,7 +229,14 @@ export default function AccountSection() {
 
       setDeviceCodeModalOpen(false);
 
-      showAlert("Failed to log into your account", "error");
+      const message =
+        error instanceof Error && error.message.includes("expired")
+          ? "Device code expired. Please try logging in again."
+          : "Failed to log into your account.";
+
+      showAlert(message, "error");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -236,6 +246,7 @@ export default function AccountSection() {
     if (window.auth.logout) {
       await window.auth.logout();
     }
+    showAlert('You have logged out','default')
   };
 
   const handleSkinChanged = () => {
@@ -259,7 +270,7 @@ export default function AccountSection() {
         <AccountTile
           username={
             isLoading
-              ? "Загрузка..."
+              ? "Loading..."
               : (account?.username ?? "Sing in to your account")
           }
           isLoggedIn={!!account}
@@ -340,6 +351,7 @@ export default function AccountSection() {
         isOpen={isDeviceCodeModalOpen}
         onOpen={handleDeviceCodeOpen}
         onClose={handleDeviceCodeClose}
+        isLoggingIn={isLoggingIn}
       />
     </div>
   );

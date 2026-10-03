@@ -14,9 +14,8 @@ export const mainNavItems: NavItem[] = [
   { id: 'datapacks', name: 'Data Packs', icon: <FileText size={24} /> },
   { id: 'resourcepacks', name: 'Resourse Packs', icon: <Palette size={24} /> },
   { id: 'shaders', name: 'Shaders', icon: <Sparkle size={24} /> },
-  { id: 'contentView', name: ''},
 ]
 
 export const bottomNavItems: NavItem[] = [
-  { id: 'settings', name: 'Settings', icon: <Settings size={24} /> },
+  // { id: 'settings', name: 'Settings', icon: <Settings size={24} /> },
 ]
