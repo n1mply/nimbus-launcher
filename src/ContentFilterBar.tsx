@@ -58,7 +58,7 @@ export default function ContentFilterBar({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {filters.map((f) => (
-          <FilterButton key={f.key} {...f} onChange={(v) => onFilterChange?.(f.key, v)} />
+          <FilterButton key={f.value} {...f} onChange={(v) => onFilterChange?.(f.key, v)} />
         ))}
         {extraFilters}
       </div>

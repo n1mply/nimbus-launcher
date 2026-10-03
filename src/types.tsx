@@ -108,7 +108,6 @@ export interface ContentItem {
   authorUrl?: string;
   summary: string;
   iconUrl?: string | null;
-  iconBg: string;
   downloads: number;
   follows: number;
   updatedAt: string;

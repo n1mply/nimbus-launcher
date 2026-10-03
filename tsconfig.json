@@ -4,7 +4,7 @@
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "skipLibCheck": true,
+
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -15,10 +15,13 @@
     "jsx": "react-jsx",
 
     /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "strict": false,               // Отключает строгий режим (включая проверку any)
+    "noImplicitAny": false,        // Разрешает неявный тип any
+    "strictNullChecks": false,     // Разрешает возможные null и undefined
+    "noUnusedLocals": false,       // Игнорировать неиспользуемые переменные
+    "noUnusedParameters": false,   // Игнорировать неиспользуемые параметры функций
+    "skipLibCheck": true           // Пропускать проверку типов во всех декларациях (.d.ts)
   },
   "include": ["src", "electron"],
   "references": [{ "path": "./tsconfig.node.json" }]

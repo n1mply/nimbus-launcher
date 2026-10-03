@@ -17,7 +17,7 @@ import {
 
 import CustomModal from "./CustomModal";
 import ConfirmModal from "./ConfirmModal";
-import { Instance, ModloaderType } from "./types";
+import { Instance } from "./types";
 import CustomInput, { CustomInputOption } from "./CustomInput";
 import { useAlert } from "./contexts/alertContext";
 

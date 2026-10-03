@@ -55,7 +55,7 @@ export function registerSkinsHandlers(): void {
       })
     )
 
-    return entries.sort((a, b) => (a.isActive ? -1 : 1)) // Активный всегда первый
+    return entries.sort((a) => (a.isActive ? -1 : 1)) // Активный всегда первый
   })
 
   // Добавление скина

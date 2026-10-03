@@ -157,7 +157,7 @@ export class LaunchService {
           (t): t is string => typeof t === "string",
         )
       : [];
-    return { memory, window: s?.window, extraJvmArgs, java: s?.java };
+    return { memory, extraJvmArgs, java: s?.java };
   }
 
   public async launch(instanceId: string, win?: BrowserWindow): Promise<void> {

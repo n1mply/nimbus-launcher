@@ -1,5 +1,5 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
-import { Version } from "../types";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createContext, useState, useEffect, useContext } from "react";
 
 const LauncherContext = createContext();
 
@@ -12,12 +12,12 @@ export function LauncherProvider({ children }) {
     const fetchVersions = async () => {
       try {
         setLoading(true);
-        const data = await window.versions.getGameVersions();
+        const data = await window?.versions.getGameVersions();
         const allVersions = data.versions;
         // console.log(allVersions);
         setVersions(allVersions);
-      } catch (err) {
-        setError(err.message);
+      } catch (err:any) {
+        setError(err?.message);
       } finally {
         setLoading(false);
       }

@@ -1,4 +1,4 @@
-import { Library, FileBox, Package, Sparkle, Settings, FileText, Palette } from 'lucide-react'
+import { Library, FileBox, Package, Sparkle, FileText, Palette } from 'lucide-react'
 import type { TabId } from '../types'
 
 export type NavItem = {

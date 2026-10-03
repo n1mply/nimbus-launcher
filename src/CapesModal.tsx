@@ -60,7 +60,7 @@ export default function CapesModal({ isOpen, onClose, uuid, onCapeChanged }: Pro
     setCapes(cached)
 
     setIsRefreshing(true)
-    window.capes
+    window?.capes
       .getAll()
       .then((fresh) => {
         setCapes((current) => {

@@ -1,6 +1,6 @@
 import { X, Square, SquaresUnite, Minus } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
-import NimbusIcon from '../public/Logo.svg'
+import NimbusIcon from '../public/icon.png'
 
 export default function HeaderMenu(){
     const [isMaximized, setIsMaximized] = useState(false)

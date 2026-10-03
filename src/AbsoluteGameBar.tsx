@@ -41,8 +41,6 @@ export default function AbsoluteGameBar({
   setStatus,
   onClose,
   onPlay,
-  onOpenFolder,
-  onOpenSettings,
 }: AbsoluteGameBarProps) {
   const [displayedInstance, setDisplayedInstance] = useState<Instance | null>(
     instance,

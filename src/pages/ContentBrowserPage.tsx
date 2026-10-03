@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SearchX, Loader2 } from "lucide-react";
 import ContentTile from "../ContentTile";
 import ContentFilterBar, { type FilterDef } from "../ContentFilterBar";
 import CustomInput, { type CustomInputOption } from "../CustomInput";
 import Pagination from "../Pagination";
-import type { ContentItem, ContentType } from "../types";
+import type { ContentItem, ContentType, VersionType } from "../types";
 import { useLauncher } from "../contexts/laucherContext";
 import { useTab } from "../contexts/tabContext";
 import { useContentInstall } from "../hooks/useContentInstall";

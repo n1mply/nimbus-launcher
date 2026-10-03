@@ -1,6 +1,7 @@
 process.env.DEBUG = "prismarine-auth";
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
-import { createRequire } from "node:module";
+import { autoUpdater } from "electron-updater";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -22,7 +23,7 @@ import { registerWorldHandlers } from "./worlds";
 import { registerExternalIpc, attachExternalLinkGuards } from "./externalLinks";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const require = createRequire(import.meta.url);
+// const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 process.env.APP_ROOT = path.join(__dirname, "..");
@@ -46,7 +47,7 @@ function createWindow(): void {
     frame: false,
     show: false,
     autoHideMenuBar: true,
-    icon: path.join(process.env.VITE_PUBLIC, "Logo.png"),
+    icon: path.join(process.env.VITE_PUBLIC, "icon.png"),
     webPreferences: {
       preload: path.join(MAIN_DIST, "preload.cjs"),
       sandbox: false,
@@ -56,7 +57,6 @@ function createWindow(): void {
   setAuthMainWindow(win);
   attachExternalLinkGuards(win);
 
-  // Регистрируем сервисы, требующие ссылку на окно для отправки IPC-событий в UI
   registerDownloadActions(win);
   const launcher = registerLaunchHandlers(win);
   registerInstanceHandlers((id) => launcher.isRunning(id));
@@ -87,8 +87,12 @@ function createWindow(): void {
 
   win.once("ready-to-show", () => {
     win?.show();
-    // Консоль (закомментировать в продакшене)
-    win?.webContents.openDevTools();
+
+    if (!VITE_DEV_SERVER_URL) {
+      // win?.webContents.openDevTools();
+    }
+
+    autoUpdater.checkForUpdatesAndNotify();
   });
 
   win.webContents.on("did-finish-load", () => {
@@ -98,9 +102,36 @@ function createWindow(): void {
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL);
   } else {
+    console.log("APP_ROOT:", process.env.APP_ROOT);
+    console.log("MAIN_DIST:", MAIN_DIST);
+    console.log("RENDERER_DIST:", RENDERER_DIST);
+
+    const indexPath = path.join(RENDERER_DIST, "index.html");
+
+    console.log("INDEX PATH:", indexPath);
+    console.log("INDEX EXISTS:", fs.existsSync(indexPath));
+
+    win.loadFile(indexPath).catch((error) => {
+      console.error("LOAD FILE ERROR:", error);
+    });
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 }
+
+// win.webContents.on(
+//   "did-fail-load",
+//   (_, errorCode, errorDescription, validatedURL) => {
+//     console.error("Failed to load renderer:", {
+//       errorCode,
+//       errorDescription,
+//       validatedURL,
+//     });
+//   },
+// );
+
+// win.webContents.on("render-process-gone", (_, details) => {
+//   console.error("Renderer process gone:", details);
+// });
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

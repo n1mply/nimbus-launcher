@@ -1,9 +1,9 @@
-// @see - https://www.electron.build/configuration/configuration
+// @see - https://electron.build
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.nimbus.launcher",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "Nimbus Launcher",
   "directories": {
     "output": "release/${version}"
   },
@@ -11,22 +11,18 @@
     "dist",
     "dist-electron"
   ],
-  "mac": {
-    "target": [
-      "dmg"
-    ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+  "publish": {
+    "provider": "github",
+    "owner": "n1mply",
+    "repo": "nimbus-launcher",
+    "releaseType": "draft"
   },
   "win": {
-    "target": [
-      {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
-      }
-    ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "target": ["nsis"],
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    // Отключаем обязательную проверку подписи Authenticode для обновлений, 
+    // так как для лаунчеров Minecraft чаще всего сертификат не покупают
+    "verifyUpdateCodeSignature": false 
   },
   "nsis": {
     "oneClick": false,
@@ -34,10 +30,12 @@
     "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false
   },
+  "mac": {
+    "target": ["dmg"],
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+  },
   "linux": {
-    "target": [
-      "AppImage"
-    ],
+    "target": ["AppImage"],
     "artifactName": "${productName}-Linux-${version}.${ext}"
   }
 }

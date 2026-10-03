@@ -121,7 +121,8 @@ export default function ContentTile({
       <div className="min-w-0 flex-1">
         <div className={`flex gap-1.5 ${isLarge ? "flex-wrap items-baseline" : "items-baseline"}`}>
           <h3 className={`text-white ${isLarge ? "" : "truncate"} ${s.title}`}>{item.name}</h3>
-          <span className="shrink-0 text-[12px] text-gray-500">by {item.author}</span>
+          {sizeType==="compact" ? "" : <span className="shrink-0 text-[12px] text-gray-500">by {item.author}</span>}
+          
           {item.authorUrl && <ArrowUpRight size={12} className="shrink-0 text-gray-600" />}
         </div>
         <p className={`mt-0.5 leading-relaxed text-gray-400 ${s.summary}`}>{item.summary}</p>

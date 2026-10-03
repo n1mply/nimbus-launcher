@@ -1,4 +1,4 @@
-import { Authflow, Titles } from "prismarine-auth";
+import { Authflow } from "prismarine-auth";
 import { BrowserWindow, ipcMain, app, shell, protocol } from "electron";
 import path from "node:path";
 import { promises as fs } from "node:fs";

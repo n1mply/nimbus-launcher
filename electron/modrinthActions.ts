@@ -3,7 +3,6 @@ import {
   saveContentToInstance,
   getInstalledContent,
   recordInstalledContent,
-  InstalledContentRecord,
 } from "./folderActions";
 
 import type { ContentItem } from "../src/types";

@@ -23,7 +23,7 @@ import stretchAnimation from "./assets/animations/stretch.animation.json";
 
 import { useAlert } from "./contexts/alertContext";
 
-const GUEST_SKIN = "/user_skin.png";
+const GUEST_SKIN = "./user_skin.png";
 
 const EXTRA_ANIMATIONS = [
   { json: armLookOutAnimation, duration: 4000 },

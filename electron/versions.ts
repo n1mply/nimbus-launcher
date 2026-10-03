@@ -89,7 +89,7 @@ async function loadGameVersions(): Promise<VersionManifest> {
   return gameVersionsPromise;
 }
 
-async function loadLoaderVersions(loader: string, mcVersion: string) {
+async function loadLoaderVersions(loader: Modloader, mcVersion: string) {
   const key = `${loader}:${mcVersion}`;
   if (loaderVersionsCache.has(key)) return loaderVersionsCache.get(key);
 
@@ -102,7 +102,7 @@ export function registerVersionsHandlers() {
   ipcMain.handle("versions:getGameVersions", () => loadGameVersions());
   ipcMain.handle(
     "versions:getLoaderVersions",
-    (_event, loader: string, mcVersion: string) =>
+    (_event, loader: Modloader, mcVersion: string) =>
       loadLoaderVersions(loader, mcVersion),
   );
 }
