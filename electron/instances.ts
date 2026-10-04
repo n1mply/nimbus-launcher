@@ -16,10 +16,14 @@ export interface CreateInstancePayload {
   modloader: string;
   minecraftVersion: string;
   modloaderVersion: string | null;
+  /** Путь к файлу иконки (Upload) */
   instanceIconPath: string | null;
+  /** PNG data URL из редактора иконок */
+  instanceIconDataUrl?: string | null;
 }
 
-export interface InstanceData extends CreateInstancePayload {
+export interface InstanceData
+  extends Omit<CreateInstancePayload, "instanceIconDataUrl"> {
   id: string;
   createdAt: number;
   iconFileName: string | null;
@@ -44,6 +48,20 @@ const getMimeType = (fileName: string) => {
 };
 
 const getInstancesPath = () => path.join(app.getPath("userData"), "instances");
+
+const MAX_ICON_BYTES = 5 * 1024 * 1024;
+
+// Декодирует PNG из data URL; бросает ошибку, если формат неверный или файл слишком большой
+function decodePngDataUrl(dataUrl: string): Buffer {
+  const match = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error("Invalid icon data");
+
+  const buffer = Buffer.from(match[1], "base64");
+  if (buffer.length === 0 || buffer.length > MAX_ICON_BYTES) {
+    throw new Error("Icon is empty or too large");
+  }
+  return buffer;
+}
 
 // Очистка имени папки от запрещенных символов
 const sanitizeFolderName = (name: string) =>
@@ -73,7 +91,14 @@ export async function createInstance(payload: CreateInstancePayload) {
 
     let iconFileName = null;
 
-    if (payload.instanceIconPath) {
+    // Иконка из редактора имеет приоритет над загруженным файлом
+    if (payload.instanceIconDataUrl) {
+      iconFileName = "icon.png";
+      await fs.writeFile(
+        path.join(instancePath, iconFileName),
+        decodePngDataUrl(payload.instanceIconDataUrl),
+      );
+    } else if (payload.instanceIconPath) {
       const ext = path.extname(payload.instanceIconPath) || ".png";
       iconFileName = `icon${ext}`;
       const destIconPath = path.join(instancePath, iconFileName);
@@ -81,8 +106,11 @@ export async function createInstance(payload: CreateInstancePayload) {
       await fs.copyFile(payload.instanceIconPath, destIconPath);
     }
 
+    // base64 не должен попасть в instance.json
+    const { instanceIconDataUrl: _omit, ...restPayload } = payload;
+
     const instanceData: InstanceData = {
-      ...payload,
+      ...restPayload,
       id: folderName,
       createdAt: Date.now(),
       iconFileName,
@@ -187,6 +215,8 @@ export interface UpdateInstanceSettingsPayload {
   name?: string;
   /** null — удалить иконку, undefined — не трогать */
   iconSourcePath?: string | null;
+  /** PNG data URL из редактора иконок; имеет приоритет над iconSourcePath */
+  iconDataUrl?: string;
   launchSettings?: {
     memory?: { minMb: number; maxMb: number } | null;
     java?: { mode: "auto" | "custom"; path?: string } | null;
@@ -212,7 +242,17 @@ export async function updateInstanceSettings(
     }
 
     // ── иконка ──
-    if (patch.iconSourcePath !== undefined) {
+    if (patch.iconDataUrl) {
+      // Сначала декодируем: при ошибке старая иконка останется на месте
+      const buffer = decodePngDataUrl(patch.iconDataUrl);
+      if (current.iconFileName) {
+        await fs
+          .rm(path.join(instancePath, current.iconFileName), { force: true })
+          .catch(() => {});
+      }
+      await fs.writeFile(path.join(instancePath, "icon.png"), buffer);
+      update.iconFileName = "icon.png";
+    } else if (patch.iconSourcePath !== undefined) {
       if (current.iconFileName) {
         await fs
           .rm(path.join(instancePath, current.iconFileName), { force: true })

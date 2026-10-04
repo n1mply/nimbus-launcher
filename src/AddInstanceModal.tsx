@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import CustomModal from "./CustomModal";
 import CustomInput, { type CustomInputOption } from "./CustomInput";
+import IconEditorModal from "./IconEditorModal";
 import { Instance } from "./types";
 import {
   Box,
   Check,
   Upload,
-  RefreshCw,
   Palette,
   ArrowLeft,
   Plus,
@@ -42,6 +42,8 @@ export default function AddInstanceModal({
   >("latest");
   const [loaderVersion, setLoaderVersion] = useState("");
   const [iconPreview, setIconPreview] = useState<string | null>(null);
+  const [iconDataUrl, setIconDataUrl] = useState<string | null>(null);
+  const [isIconEditorOpen, setIsIconEditorOpen] = useState(false);
   const { versions } = useLauncher();
   const [parsedVersions, setParsedVersions] = useState([]);
   const [loaderVersions, setLoaderVersions] = useState([]);
@@ -73,8 +75,22 @@ export default function AddInstanceModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (iconPreview?.startsWith("blob:")) URL.revokeObjectURL(iconPreview);
+
     setIconPreview(URL.createObjectURL(file));
-    setIconFilePath((file as any).path);
+    setIconFilePath(
+      window.webUtilsAPI?.getPathForFile(file) ?? (file as any).path,
+    );
+    setIconDataUrl(null);
+    e.target.value = ""; // чтобы можно было выбрать тот же файл повторно
+  };
+
+  const handleIconEditorSave = (dataUrl: string) => {
+    if (iconPreview?.startsWith("blob:")) URL.revokeObjectURL(iconPreview);
+
+    setIconPreview(dataUrl);
+    setIconDataUrl(dataUrl);
+    setIconFilePath(null);
   };
 
   const handleModloaderSelect = (loader: Instance["modloader"]) => {
@@ -129,6 +145,7 @@ export default function AddInstanceModal({
       minecraftVersion,
       modloaderVersion: resolvedLoaderVersion,
       instanceIconPath: iconFilePath,
+      instanceIconDataUrl: iconDataUrl, // PNG из редактора иконок, main сохраняет в папку сборки
     };
 
     try {
@@ -160,9 +177,11 @@ export default function AddInstanceModal({
 
   useEffect(() => {
     if (!isOpen) {
-      if (iconPreview) {
+      if (iconPreview?.startsWith("blob:")) {
         URL.revokeObjectURL(iconPreview);
       }
+      setIsIconEditorOpen(false);
+      setIconDataUrl(null);
       setName("");
       setModloader("vanilla");
       setMinecraftVersion("");
@@ -212,6 +231,7 @@ export default function AddInstanceModal({
       isFlexible
       title="Create instance"
       closeOnOutsideClick={false}
+      closeOnEsc={!isIconEditorOpen}
     >
       <div className="flex flex-col gap-5">
         {/* Аватарка сборки */}
@@ -245,14 +265,7 @@ export default function AddInstanceModal({
             </button>
             <button
               type="button"
-              onClick={() => setIconPreview(null)}
-              className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[13px] text-gray-300 transition-colors hover:bg-white/[0.06] hover:text-white cursor-pointer"
-            >
-              <RefreshCw size={15} />
-              Randomize
-            </button>
-            <button
-              type="button"
+              onClick={() => setIsIconEditorOpen(true)}
               className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[13px] text-gray-300 transition-colors hover:bg-white/[0.06] hover:text-white cursor-pointer"
             >
               <Palette size={15} />
@@ -389,6 +402,12 @@ export default function AddInstanceModal({
           </button>
         </div>
       </div>
+
+      <IconEditorModal
+        isOpen={isIconEditorOpen}
+        onClose={() => setIsIconEditorOpen(false)}
+        onSave={handleIconEditorSave}
+      />
     </CustomModal>
   );
 }

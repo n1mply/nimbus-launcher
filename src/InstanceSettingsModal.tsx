@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Upload,
-  RefreshCw,
   Palette,
   Trash2,
   Loader2,
@@ -17,6 +16,7 @@ import {
 
 import CustomModal from "./CustomModal";
 import ConfirmModal from "./ConfirmModal";
+import IconEditorModal from "./IconEditorModal";
 import { Instance } from "./types";
 import CustomInput, { CustomInputOption } from "./CustomInput";
 import { useAlert } from "./contexts/alertContext";
@@ -307,6 +307,9 @@ export default function InstanceSettingsModal({
     instance.instanceIconPath ?? null,
   );
   const [iconDiskPath, setIconDiskPath] = useState<string | null>(null);
+  // Иконка из редактора (PNG data URL); взаимоисключается с iconDiskPath
+  const [iconDataUrl, setIconDataUrl] = useState<string | null>(null);
+  const [isIconEditorOpen, setIsIconEditorOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loaderSel, setLoaderSel] = useState(instance.modloaderVersion || "");
@@ -390,6 +393,8 @@ export default function InstanceSettingsModal({
     setName(initial.name);
     setIconPreview(instance.instanceIconPath ?? null);
     setIconDiskPath(null);
+    setIconDataUrl(null);
+    setIsIconEditorOpen(false);
     setLoaderSel(instance.modloaderVersion || "");
     setMinMb(initial.minMb);
     setMaxMb(initial.maxMb);
@@ -432,10 +437,18 @@ export default function InstanceSettingsModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const diskPath = (file as any).path || null;
+    const diskPath =
+      window.webUtilsAPI?.getPathForFile(file) ?? (file as any).path ?? null;
     setIconDiskPath(diskPath);
+    setIconDataUrl(null);
     setIconPreview(URL.createObjectURL(file));
     e.target.value = "";
+  };
+
+  const handleIconEditorSave = (dataUrl: string) => {
+    setIconPreview(dataUrl);
+    setIconDataUrl(dataUrl);
+    setIconDiskPath(null);
   };
 
   const handlePickJava = async () => {
@@ -549,7 +562,9 @@ export default function InstanceSettingsModal({
         payload.name = name.trim();
       }
 
-      if (iconDiskPath) {
+      if (iconDataUrl) {
+        payload.iconDataUrl = iconDataUrl;
+      } else if (iconDiskPath) {
         payload.iconSourcePath = iconDiskPath;
       }
 
@@ -612,13 +627,24 @@ export default function InstanceSettingsModal({
     return (
       name.trim() !== initial.name ||
       iconDiskPath !== null ||
+      iconDataUrl !== null ||
       minMb !== initial.minMb ||
       maxMb !== initial.maxMb ||
       javaMode !== initial.javaMode ||
       (javaMode === "custom" && javaPath.trim() !== initial.javaPath) ||
       jvmArgs !== initial.jvmArgs
     );
-  }, [name, initial, iconDiskPath, minMb, maxMb, javaMode, javaPath, jvmArgs]);
+  }, [
+    name,
+    initial,
+    iconDiskPath,
+    iconDataUrl,
+    minMb,
+    maxMb,
+    javaMode,
+    javaPath,
+    jvmArgs,
+  ]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const versionsToDisplay =
@@ -641,7 +667,9 @@ export default function InstanceSettingsModal({
         onClose={handleClose}
         title={`Settings — ${instance.name} ${instance.minecraftVersion}`}
         size="large"
-        closeOnEsc={!confirmDelete && !saving && !deleting}
+        closeOnEsc={
+          !confirmDelete && !saving && !deleting && !isIconEditorOpen
+        }
       >
         <div className="flex flex-col gap-4">
           <div className="custom-scrollbar flex max-h-[70vh] flex-col gap-5 overflow-y-auto pr-1">
@@ -695,14 +723,8 @@ export default function InstanceSettingsModal({
                     </button>
                     <button
                       type="button"
-                      className={`${secondaryBtnCls} flex-1 justify-center opacity-60`}
-                    >
-                      <RefreshCw size={15} />
-                      Randomize
-                    </button>
-                    <button
-                      type="button"
-                      className={`${secondaryBtnCls} flex-1 justify-center opacity-60`}
+                      onClick={() => setIsIconEditorOpen(true)}
+                      className={`${secondaryBtnCls} flex-1 justify-center`}
                     >
                       <Palette size={15} />
                       Customize
@@ -971,6 +993,12 @@ export default function InstanceSettingsModal({
           </div>
         </div>
       </CustomModal>
+
+      <IconEditorModal
+        isOpen={isIconEditorOpen}
+        onClose={() => setIsIconEditorOpen(false)}
+        onSave={handleIconEditorSave}
+      />
 
       <ConfirmModal
         isOpen={confirmDelete}
