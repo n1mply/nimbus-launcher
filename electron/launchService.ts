@@ -240,7 +240,16 @@ export class LaunchService {
       }
     }
 
-    if (instance.modloader !== "neoforge") {
+    // ─── ОПРЕДЕЛЕНИЕ ТИПА ЗАГРУЗЧИКА И ДОБАВЛЕНИЕ КЛИЕНТСКОГО JAR ─────────────
+    const match = instance.minecraftVersion.match(/^1\.(\d+)/);
+    const minorVersion = match ? parseInt(match[1], 10) : 0;
+    const isModernForge =
+      instance.modloader === "neoforge" ||
+      (instance.modloader === "forge" && minorVersion >= 13);
+
+    // Ванильный jar нужен для Vanilla, Fabric, Quilt, а также Legacy Forge (<= 1.12.2).
+    // Для Modern Forge (>= 1.13) и NeoForge он НЕ добавляется (они используют сгенерированный клиент).
+    if (!isModernForge) {
       const clientJar = path.join(
         versionsDir,
         instance.minecraftVersion,
@@ -248,6 +257,7 @@ export class LaunchService {
       );
       if (fs.existsSync(clientJar)) classpathEntries.push(clientJar);
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const cpSeparator = process.platform === "win32" ? ";" : ":";
     const fullClasspath = classpathEntries
@@ -318,11 +328,13 @@ export class LaunchService {
       "${version_name}": versionId,
       "${game_directory}": mcDir,
       "${assets_root}": assetsDir,
+      "${game_assets}": assetsDir, // <-- Для старых версий (1.7 и ниже)
       "${assets_index_name}":
         versionData.assetIndex?.id ?? instance.minecraftVersion,
       "${auth_uuid}": formatUuidWithDashes(credentials.uuid),
       "${auth_access_token}": credentials.accessToken,
       "${user_type}": credentials.userType,
+      "${user_properties}": "{}", // <-- ВОТ ЭТО РЕШАЕТ КРАШ (передаём пустой JSON)
       "${version_type}": "release",
       "${clientid}": Titles.MinecraftNintendoSwitch,
     };

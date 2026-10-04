@@ -87,10 +87,7 @@ function createWindow(): void {
 
   win.once("ready-to-show", () => {
     win?.show();
-
-    if (!VITE_DEV_SERVER_URL) {
-      // win?.webContents.openDevTools();
-    }
+    // win?.webContents.openDevTools();
 
     autoUpdater.checkForUpdatesAndNotify();
   });

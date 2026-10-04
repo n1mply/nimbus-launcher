@@ -477,24 +477,90 @@ export async function installWithDependencies(opts: {
     worldFolderName,
   } = opts;
 
+  // 1. Скачиваем зависимости с фильтрацией под версию игры и лоадер
   if (dependencyProjectIds && dependencyProjectIds.length > 0) {
+    const versionDeps = Array.isArray(mainProject.version?.dependencies)
+      ? mainProject.version.dependencies
+      : [];
+
     for (const depId of dependencyProjectIds) {
       try {
-        const vers = await modrinthFetch<any[]>(`/project/${depId}/version`);
-        if (vers && vers.length > 0) {
-          await downloadAndSaveSingleProject(
-            depId,
-            "mod",
-            instanceFolderName,
-            vers[0],
+        let targetDepVersion: any = null;
+
+        // А. Если автор основного мода привязал конкретный version_id зависимости
+        const depMeta = versionDeps.find((d: any) => d.project_id === depId);
+        if (depMeta?.version_id) {
+          try {
+            targetDepVersion = await modrinthFetch<any>(
+              `/version/${encodeURIComponent(depMeta.version_id)}`,
+            );
+          } catch (e) {
+            console.warn(
+              `[Modrinth] Failed to fetch pinned version ${depMeta.version_id}, falling back to query search:`,
+              e,
+            );
+          }
+        }
+
+        // Б. Если конкретного version_id нет или запрос упал — ищем версию с фильтрами
+        if (!targetDepVersion) {
+          const params = new URLSearchParams();
+
+          if (modloader && modloader !== "vanilla") {
+            // Quilt поддерживает Fabric-моды
+            const loaders =
+              modloader.toLowerCase() === "quilt"
+                ? ["quilt", "fabric"]
+                : [modloader.toLowerCase()];
+            params.set("loaders", JSON.stringify(loaders));
+          }
+
+          if (minecraftVersion) {
+            params.set("game_versions", JSON.stringify([minecraftVersion]));
+          }
+
+          let vers = await modrinthFetch<any[]>(
+            `/project/${depId}/version?${params.toString()}`,
+          );
+
+          // Если с фильтром по лоадеру ничего не нашлось — пробуем только по версии Minecraft
+          // (многие библиотеки универсальны и не помечаются конкретным лоадером)
+          if ((!vers || vers.length === 0) && minecraftVersion) {
+            const fallbackParams = new URLSearchParams();
+            fallbackParams.set(
+              "game_versions",
+              JSON.stringify([minecraftVersion]),
+            );
+            vers = await modrinthFetch<any[]>(
+              `/project/${depId}/version?${fallbackParams.toString()}`,
+            );
+          }
+
+          if (vers && vers.length > 0) {
+            targetDepVersion = vers[0];
+          }
+        }
+
+        if (!targetDepVersion) {
+          throw new Error(
+            `No compatible version found for dependency "${depId}" on ${modloader ?? ""} ${minecraftVersion}`,
           );
         }
+
+        await downloadAndSaveSingleProject(
+          depId,
+          "mod",
+          instanceFolderName,
+          targetDepVersion,
+        );
       } catch (e) {
-        console.warn(`Could not install dependency ${depId}:`, e);
+        console.error(`[Modrinth] Could not install dependency ${depId}:`, e);
+        throw e;
       }
     }
   }
 
+  // 2. Скачиваем целевой мод
   const file =
     mainProject.version.files.find((f: any) => f.primary) ||
     mainProject.version.files[0];

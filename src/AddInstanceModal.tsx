@@ -62,7 +62,7 @@ export default function AddInstanceModal({
       case "quilt":
         return "1.18.2";
       case "neoforge":
-        return "1.20.1";
+        return "1.20.2";
       case "forge":
         return "1.6.1";
       case "vanilla":

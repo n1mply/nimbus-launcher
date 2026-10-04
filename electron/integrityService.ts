@@ -458,6 +458,32 @@ export class IntegrityService {
       }
     }
 
+    const preserveDirs = [
+      path.join(librariesDir, "net", "minecraft", "client"),
+      path.join(librariesDir, "net", "minecraftforge"),
+      path.join(librariesDir, "net", "neoforged"),
+    ];
+
+    const addFilesRecursively = async (dir: string) => {
+      try {
+        const entries = await fsp.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            await addFilesRecursively(full);
+          } else {
+            expectedLibs.add(full);
+          }
+        }
+      } catch {}
+    };
+
+    for (const pDir of preserveDirs) {
+      if (fs.existsSync(pDir)) {
+        await addFilesRecursively(pDir);
+      }
+    }
+
     if (fs.existsSync(librariesDir)) {
       const removed = await this.pruneDirRecursive(librariesDir, expectedLibs);
       result.removedFiles += removed.removedFiles;
